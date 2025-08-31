@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Navbar from './Navbar';
-import Sidebar from './Sidebar';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Navbar from "./Navbar";
+import Sidebar from "./Sidebar";
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -9,22 +9,47 @@ export default function DashboardLayout({ children }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Get user info from localStorage or API
-    const token = localStorage.getItem('token');
-    const role = localStorage.getItem('role');
-    
+    const token = localStorage.getItem("token");
+
     if (!token) {
-      navigate('/login');
+      navigate("/login");
       return;
     }
 
-    // You'll replace this with actual API call to get user details
-    setUser({
-      name: 'John Doe', // Will come from API
-      email: 'john@example.com', // Will come from API
-      role: role,
-      avatar: null // Will come from API or default
-    });
+    // 🔹 Fetch user details from backend
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/auth/me", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`, // send token
+          },
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          setUser({
+            id: data.id,   // ✅ keep user id
+            name: data.name,
+            email: data.email,
+            role: data.role,
+            avatar: data.avatar || null, // if you plan to add avatar later
+          });
+        } else {
+          // if token invalid, redirect to login
+          localStorage.clear();
+          navigate("/login");
+        }
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        localStorage.clear();
+        navigate("/login");
+      }
+    };
+
+    fetchUser();
   }, [navigate]);
 
   const toggleSidebar = () => {
@@ -42,14 +67,14 @@ export default function DashboardLayout({ children }) {
   return (
     <div className="flex h-screen bg-gray-100">
       <Sidebar isOpen={sidebarOpen} user={user} />
-      
+
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar 
-          user={user} 
-          onToggleSidebar={toggleSidebar} 
+        <Navbar
+          user={user}
+          onToggleSidebar={toggleSidebar}
           sidebarOpen={sidebarOpen}
         />
-        
+
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
           {children}
         </main>

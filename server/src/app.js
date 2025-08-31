@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
 import contentRoutes from "./routes/contentRoutes.js";
 import './models/Content.js';
+import profileRoutes from "./routes/profileRoutes.js";
 dotenv.config(); // 👈 Move this to the top
 
 const app = express();
@@ -15,7 +16,7 @@ app.use(express.json());
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/content", contentRoutes);
-
+app.use("/api/profile", profileRoutes);
 // Test Route
 app.get("/", (req, res) => {
   res.send("Backend API is running 🚀");

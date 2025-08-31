@@ -8,7 +8,8 @@ export default function Register() {
     email: "",
     password: "",
     role: "student",
-    extra: {} // role-specific data
+    extra: {}, // role-specific data
+    profile_photo: null, // file
   });
 
   const handleChange = (e) => {
@@ -18,37 +19,59 @@ export default function Register() {
   const handleExtraChange = (e) => {
     setForm({
       ...form,
-      extra: { ...form.extra, [e.target.name]: e.target.value }
+      extra: { ...form.extra, [e.target.name]: e.target.value },
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch("http://localhost:5000/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-
-      if (res.ok) {
-        alert("Registration successful! Please login.");
-        navigate("/login");
-      } else {
-        alert("Error registering user.");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Something went wrong.");
-    }
+  const handleFileChange = (e) => {
+    setForm({ ...form, profile_photo: e.target.files[0] }); // save the blob
   };
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  try {
+    const formData = new FormData();
+    formData.append("name", form.name);
+    formData.append("email", form.email);
+    formData.append("password", form.password);
+    formData.append("role", form.role);
+
+    // Append role-specific data
+    for (const key in form.extra) {
+      formData.append(key, form.extra[key]);
+    }
+
+    // ✅ Correct file field name
+    if (form.profile_photo) {
+      formData.append("photo", form.profile_photo);
+    }
+
+    const res = await fetch("http://localhost:5000/api/auth/register", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (res.ok) {
+      alert("Registration successful! Please login.");
+      navigate("/login");
+    } else {
+      const errData = await res.json();
+      alert("Error: " + (errData.message || "Registration failed"));
+    }
+  } catch (error) {
+    console.error(error);
+    alert("Something went wrong.");
+  }
+};
+
 
   // 🟢 Role-based extra fields
   const renderExtraFields = () => {
     switch (form.role) {
       case "student":
         return (
-            <>
+          <>
             <h3 className="font-semibold mt-4">Personal Information</h3>
             <input name="dob" type="date" placeholder="Date of Birth" onChange={handleExtraChange} className="w-full p-2 mb-3 border rounded" />
             <input name="gender" placeholder="Gender" onChange={handleExtraChange} className="w-full p-2 mb-3 border rounded" />
@@ -60,9 +83,8 @@ export default function Register() {
             <input name="department" placeholder="Department/Branch" onChange={handleExtraChange} className="w-full p-2 mb-3 border rounded" />
             <input name="year_of_study" placeholder="Year of Study" onChange={handleExtraChange} className="w-full p-2 mb-3 border rounded" />
             <input name="cgpa" placeholder="Current CGPA" onChange={handleExtraChange} className="w-full p-2 mb-3 border rounded" />
-            </>
+          </>
         );
-
 
       case "recruiter":
         return (
@@ -100,17 +122,21 @@ export default function Register() {
     <div className="flex justify-center items-center min-h-screen bg-gray-100 overflow-y-auto p-6">
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-md w-full max-w-lg">
         <h2 className="text-2xl font-bold mb-4">Register</h2>
-        
+
         {/* Base Fields */}
         <input type="text" name="name" placeholder="Name" value={form.name} onChange={handleChange} className="w-full p-2 mb-3 border rounded" required />
         <input type="email" name="email" placeholder="Email" value={form.email} onChange={handleChange} className="w-full p-2 mb-3 border rounded" required />
         <input type="password" name="password" placeholder="Password" value={form.password} onChange={handleChange} className="w-full p-2 mb-3 border rounded" required />
-        
+
         <select name="role" value={form.role} onChange={handleChange} className="w-full p-2 mb-3 border rounded">
           <option value="student">Student</option>
           <option value="recruiter">Recruiter</option>
           <option value="admin">Admin</option>
         </select>
+
+        {/* Profile Photo */}
+        <h3 className="font-semibold mt-4">Profile Photo</h3>
+        <input type="file" accept="image/*" onChange={handleFileChange} className="w-full p-2 mb-3 border rounded" />
 
         {/* Dynamic Fields */}
         {renderExtraFields()}

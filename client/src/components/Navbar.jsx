@@ -51,17 +51,23 @@ export default function Navbar({ user, onToggleSidebar, sidebarOpen }) {
               className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
             >
               <div className="flex items-center space-x-3">
-                {user.avatar ? (
+                {user.id ? (
                   <img 
-                    src={user.avatar} 
+                    src={`http://localhost:5000/api/auth/photo/${user.id}`} 
                     alt={user.name}
                     className="h-8 w-8 rounded-full object-cover"
+                    onError={(e) => {
+                      // fallback if photo is missing
+                      e.target.onerror = null;
+                      e.target.src = "https://ui-avatars.com/api/?name=" + user.name;
+                    }}
                   />
                 ) : (
                   <div className="h-8 w-8 bg-blue-600 rounded-full flex items-center justify-center">
                     <User className="h-5 w-5 text-white" />
                   </div>
                 )}
+
                 
                 <div className="text-left">
                   <p className="text-sm font-medium text-gray-700">{user.name}</p>
