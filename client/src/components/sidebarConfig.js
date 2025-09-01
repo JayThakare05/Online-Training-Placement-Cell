@@ -7,7 +7,7 @@ const sidebarConfig = {
   ],
   recruiter: [
     { name: "Dashboard", path: "/recruiter/dashboard", icon: "🏠" },
-    { name: "Post Job", path: "/recruiter/jobs", icon: "➕" },
+    { name: "Post Job", path: "/recruiter/post-job", icon: "➕" },
     { name: "Search Candidates", path: "/recruiter/search", icon: "🔍" },
   ],
   admin: [

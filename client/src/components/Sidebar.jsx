@@ -20,7 +20,7 @@ const navigationConfig = {
   ],
   recruiter: [
     { name: 'Dashboard', path: '/recruiter/dashboard', icon: Home },
-    { name: 'Post Jobs', path: '/recruiter/jobs', icon: Briefcase },
+    { name: 'Post Jobs', path: '/recruiter/post-job', icon: Briefcase },
     { name: 'Search Candidates', path: '/recruiter/search', icon: Search },
     { name: 'Shortlisted', path: '/recruiter/shortlisted', icon: Users },
     { name: 'Job Fair', path: '/recruiter/jobfair', icon: Calendar },

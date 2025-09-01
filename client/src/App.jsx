@@ -22,6 +22,14 @@ import Reports from './features/admin/Reports';
 import MonitorData from './features/admin/MonitorData';
 import ManageStudents from './features/admin/ManageStudents';
 
+import PostJob from "./features/recruiter/PostJob";
+
+import CodingBattle from './features/student/CodingBattle';
+import JobApplications from './features/student/JobApplications';
+import MockInterviews from './features/student/MockInterviews';
+import UploadResume from './features/student/UploadResume';
+
+
 // Protected Route Component
 function ProtectedRoute({ children, allowedRole }) {
   const token = localStorage.getItem('token');
@@ -123,6 +131,14 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route 
+            path="/recruiter/post-job" 
+            element={
+              <ProtectedRoute allowedRole="recruiter">
+                <PostJob/>
+              </ProtectedRoute>
+            } 
+          />
           
           {/* Student Routes */}
           <Route 
@@ -138,6 +154,38 @@ function App() {
             element={
               <ProtectedRoute allowedRole="student">
                 <StudentProfile />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/student/resume" 
+            element={
+              <ProtectedRoute allowedRole="student">
+                <UploadResume />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/student/interviews" 
+            element={
+              <ProtectedRoute allowedRole="student">
+                <MockInterviews />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/student/coding" 
+            element={
+              <ProtectedRoute allowedRole="student">
+                <CodingBattle />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/student/applications" 
+            element={
+              <ProtectedRoute allowedRole="student">
+                <JobApplications />
               </ProtectedRoute>
             } 
           />
