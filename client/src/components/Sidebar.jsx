@@ -2,14 +2,17 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Home, Users, FileText, BarChart, Settings, 
   UserCheck, Briefcase, BookOpen, Trophy,
-  Calendar, MessageSquare, Search, Upload
+  Calendar, MessageSquare, Search, Upload,
+  GraduationCap   // ✅ add this
 } from 'lucide-react';
+
 
 // Navigation configs for different roles
 const navigationConfig = {
   admin: [
     { name: 'Dashboard', path: '/admin/dashboard', icon: Home },
     { name: 'Manage Training', path: '/admin/training', icon: BookOpen },
+    { name: "Manage Students", path: "/admin/manage-students", icon: GraduationCap },
     { name: 'Verify Recruiters', path: '/admin/verify', icon: UserCheck },
     // { name: 'Monitor Data', path: '/admin/monitor', icon: BarChart },
     { name: 'Reports', path: '/admin/reports', icon: FileText },

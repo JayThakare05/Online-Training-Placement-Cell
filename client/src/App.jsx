@@ -20,6 +20,7 @@ import ManageTraining from './features/admin/ManageTrainingContent';
 import VerifyRecruiters from './features/admin/VerifyRecruiters';
 import Reports from './features/admin/Reports';
 import MonitorData from './features/admin/MonitorData';
+import ManageStudents from './features/admin/ManageStudents';
 
 // Protected Route Component
 function ProtectedRoute({ children, allowedRole }) {
@@ -71,6 +72,14 @@ function App() {
                 <ManageTraining />
               </ProtectedRoute>
             } 
+          />
+          <Route 
+            path="/admin/manage-students" 
+            element={
+              <ProtectedRoute allowedRole="admin">
+                <ManageStudents />
+              </ProtectedRoute>
+            }
           />
           <Route 
             path="/admin/verify" 

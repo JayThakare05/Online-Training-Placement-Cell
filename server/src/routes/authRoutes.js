@@ -645,5 +645,52 @@ router.get("/admin/recruiters/search", authenticateToken, async (req, res) => {
 });
 
 
+// ================== GET ALL STUDENTS (ADMIN ONLY) ==================
+router.get("/admin/students", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized. Admin access required." });
+    }
+
+    const pool = getMySQLPool();
+
+    const [students] = await pool.query(`
+      SELECT 
+        s.student_id,
+        s.user_id,
+        u.name,
+        u.email,
+        u.created_at as registered,
+        s.dob,
+        s.gender,
+        s.contact,
+        s.address,
+        s.roll_no,
+        s.college,
+        s.department,
+        s.year_of_study,
+        s.cgpa,
+        s.marks_10,
+        s.marks_12,
+        s.backlogs,
+        s.skills,
+        s.certifications,
+        s.projects,
+        s.resume_url,
+        s.job_roles,
+        s.job_locations,
+        s.placement_status,
+        s.isPlaced
+      FROM students s
+      INNER JOIN users u ON s.user_id = u.id
+      ORDER BY u.created_at DESC
+    `);
+
+    res.status(200).json(students);
+  } catch (error) {
+    console.error("Error fetching students:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+});
 
 export default router;
