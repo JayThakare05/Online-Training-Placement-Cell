@@ -4,6 +4,13 @@ import jwt from "jsonwebtoken";
 import multer from "multer"; // for file uploads
 import { getMySQLPool } from "../config/db.js";
 import { authenticateToken } from "../middleware/auth.js";
+// ------------------------------------------------------------------
+function excelDateToSQL(serial) {
+  if (!serial) return null;
+  // Excel epoch = 1900-01-00; JS epoch = 1970-01-01
+  const epoch = new Date(1900, 0, serial - 1);
+  return epoch.toISOString().slice(0, 10);   // → 'YYYY-MM-DD'
+}
 
 const router = express.Router();
 
@@ -48,23 +55,58 @@ router.post("/register", upload.single("photo"), async (req, res) => {
 
     // Insert into role-specific table regardless of photo upload
     if (role === "student") {
-      const { dob, gender, contact, roll_no, college, department, year_of_study, cgpa } = req.body;
+      const {
+        dob,
+        gender,
+        contact,
+        address,
+        roll_no,
+        college,
+        department,
+        year_of_study,
+        cgpa,
+        marks_10,
+        marks_12,
+        backlogs,
+        skills,
+        certifications,
+        projects,
+        resume_url,
+        job_roles,
+        job_locations,
+        placement_status,
+        isPlaced
+      } = req.body;
       
       await pool.query(
         `INSERT INTO students 
-         (user_id, dob, gender, contact_number, roll_no, college, department, year_of_study, cgpa, profile_photo) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (user_id, dob, gender, contact, address, roll_no, college, department, year_of_study,
+          cgpa, marks_10, marks_12, backlogs, skills, certifications, projects, resume_url,
+          job_roles, job_locations, placement_status, profile_photo, isPlaced)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           userId,
           dob || null,
           gender || null,
           contact || null,
+          address || null,
           roll_no || null,
           college || null,
           department || null,
           year_of_study || null,
           cgpa || null,
-          photo
+          marks_10 || null,
+          marks_12 || null,
+          backlogs || 0,
+          skills || null,
+          certifications || null,
+          projects || null,
+          resume_url || null,
+          job_roles || null,
+          job_locations || null,
+          placement_status || null,
+          photo,
+          isPlaced ? 1 : 0
         ]
       );
     } else if (role === "recruiter") {
@@ -847,4 +889,486 @@ router.delete("/admin/students/:studentId", authenticateToken, async (req, res) 
   }
 });
 
+// Add these endpoints to your existing authRoutes.js file
+
+// ================== BULK STUDENT REGISTRATION ==================
+router.post("/admin/students/bulk-register", authenticateToken, upload.none(), async (req, res) => {
+  const connection = await getMySQLPool().getConnection();
+  
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Unauthorized. Admin access required.' });
+    }
+
+    const studentsData = req.body.students; // Array of student objects
+    
+    if (!Array.isArray(studentsData) || studentsData.length === 0) {
+      return res.status(400).json({ message: 'Invalid students data. Expected array of student objects.' });
+    }
+
+    await connection.beginTransaction();
+
+    const results = {
+      success: [],
+      errors: []
+    };
+
+    for (let i = 0; i < studentsData.length; i++) {
+      const studentData = studentsData[i];
+      
+      try {
+        // Validate required fields
+        if (!studentData.name || !studentData.email || !studentData.password) {
+          results.errors.push({
+            row: i + 1,
+            data: studentData,
+            error: "Missing required fields (name, email, password)"
+          });
+          continue;
+        }
+
+        // Check if email already exists
+        const [existingUser] = await connection.query(
+          "SELECT * FROM users WHERE email = ?", 
+          [studentData.email]
+        );
+        
+        if (existingUser.length > 0) {
+          results.errors.push({
+            row: i + 1,
+            data: studentData,
+            error: "Email already registered"
+          });
+          continue;
+        }
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(studentData.password, 10);
+
+        // Insert into users table
+        const [userResult] = await connection.query(
+          "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
+          [studentData.name, studentData.email, hashedPassword, 'student']
+        );
+
+        const userId = userResult.insertId;
+        // Prepare student data with defaults
+        const studentFields = {
+          user_id: userId,
+          dob: excelDateToSQL(studentData.dob),
+          gender: studentData.gender || null,
+          contact: studentData.contact || null,
+          address: studentData.address || null,
+          roll_no: studentData.roll_no || null,
+          college: studentData.college || null,
+          department: studentData.department || null,
+          year_of_study: studentData.year_of_study || null,
+          cgpa: studentData.cgpa ? parseFloat(studentData.cgpa) : null,
+          marks_10: studentData.marks_10 ? parseFloat(studentData.marks_10) : null,
+          marks_12: studentData.marks_12 ? parseFloat(studentData.marks_12) : null,
+          backlogs: studentData.backlogs ? parseInt(studentData.backlogs) : 0,
+          skills: studentData.skills || null,
+          certifications: studentData.certifications || null,
+          projects: studentData.projects || null,
+          resume_url: studentData.resume_url || null,
+          job_roles: studentData.job_roles || null,
+          job_locations: studentData.job_locations || null,
+          placement_status: studentData.placement_status || null,
+          isPlaced: studentData.isPlaced === 'true' || studentData.isPlaced === '1' || studentData.isPlaced === 1 ? 1 : 0
+        };
+
+        // Insert into students table
+        await connection.query(
+          `INSERT INTO students 
+           (user_id, dob, gender, contact, address, roll_no, college, department, 
+            year_of_study, cgpa, marks_10, marks_12, backlogs, skills, 
+            certifications, projects, resume_url, job_roles, job_locations, 
+            placement_status, isPlaced) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            studentFields.user_id,
+            studentFields.dob,
+            studentFields.gender,
+            studentFields.contact,
+            studentFields.address,
+            studentFields.roll_no,
+            studentFields.college,
+            studentFields.department,
+            studentFields.year_of_study,
+            studentFields.cgpa,
+            studentFields.marks_10,
+            studentFields.marks_12,
+            studentFields.backlogs,
+            studentFields.skills,
+            studentFields.certifications,
+            studentFields.projects,
+            studentFields.resume_url,
+            studentFields.job_roles,
+            studentFields.job_locations,
+            studentFields.placement_status,
+            studentFields.isPlaced
+          ]
+        );
+
+        results.success.push({
+          row: i + 1,
+          name: studentData.name,
+          email: studentData.email,
+          user_id: userId
+        });
+
+      } catch (error) {
+        console.error(`Error processing student ${i + 1}:`, error);
+        results.errors.push({
+          row: i + 1,
+          data: studentData,
+          error: error.message || "Unknown error occurred"
+        });
+      }
+    }
+
+    await connection.commit();
+
+    res.status(200).json({
+      message: "Bulk registration completed",
+      results: results,
+      summary: {
+        total: studentsData.length,
+        successful: results.success.length,
+        failed: results.errors.length
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Bulk registration error:", error);
+    res.status(500).json({ message: "Internal server error during bulk registration" });
+  } finally {
+    connection.release();
+  }
+});
+
+// ================== GET ALL STUDENTS (ADMIN) ==================
+router.get("/admin/students", authenticateToken, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Unauthorized. Admin access required.' });
+    }
+
+    const [students] = await getMySQLPool().query(`
+      SELECT 
+        s.*,
+        u.name,
+        u.email,
+        u.registered,
+        s.user_id as student_id
+      FROM students s
+      JOIN users u ON s.user_id = u.user_id
+      ORDER BY u.registered DESC
+    `);
+
+    res.json(students);
+  } catch (error) {
+    console.error("Error fetching students:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// ================== UPDATE STUDENT (ADMIN) ==================
+router.put("/admin/students/:id", authenticateToken, async (req, res) => {
+  const connection = await getMySQLPool().getConnection();
+  
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Unauthorized. Admin access required.' });
+    }
+
+    const studentId = req.params.id;
+    const updateData = req.body;
+
+    await connection.beginTransaction();
+
+    // Update users table if needed
+    if (updateData.name || updateData.email) {
+      const userUpdateFields = [];
+      const userUpdateValues = [];
+
+      if (updateData.name) {
+        userUpdateFields.push('name = ?');
+        userUpdateValues.push(updateData.name);
+      }
+
+      if (updateData.email) {
+        // Check if email already exists for another user
+        const [existingUser] = await connection.query(
+          "SELECT user_id FROM users WHERE email = ? AND user_id != ?", 
+          [updateData.email, studentId]
+        );
+        
+        if (existingUser.length > 0) {
+          return res.status(400).json({ message: "Email already exists" });
+        }
+
+        userUpdateFields.push('email = ?');
+        userUpdateValues.push(updateData.email);
+      }
+
+      if (userUpdateFields.length > 0) {
+        userUpdateValues.push(studentId);
+        await connection.query(
+          `UPDATE users SET ${userUpdateFields.join(', ')} WHERE user_id = ?`,
+          userUpdateValues
+        );
+      }
+    }
+
+    // Update students table
+    const studentFields = [];
+    const studentValues = [];
+
+    const fieldsMap = {
+      dob: 'dob',
+      gender: 'gender',
+      contact: 'contact',
+      address: 'address',
+      roll_no: 'roll_no',
+      college: 'college',
+      department: 'department',
+      year_of_study: 'year_of_study',
+      cgpa: 'cgpa',
+      marks_10: 'marks_10',
+      marks_12: 'marks_12',
+      backlogs: 'backlogs',
+      skills: 'skills',
+      certifications: 'certifications',
+      projects: 'projects',
+      resume_url: 'resume_url',
+      job_roles: 'job_roles',
+      job_locations: 'job_locations',
+      placement_status: 'placement_status',
+      isPlaced: 'isPlaced'
+    };
+
+    Object.keys(fieldsMap).forEach(key => {
+      if (updateData.hasOwnProperty(key)) {
+        studentFields.push(`${fieldsMap[key]} = ?`);
+        
+        let value = updateData[key];
+        
+        // Handle specific field types
+        if (key === 'cgpa' || key === 'marks_10' || key === 'marks_12') {
+          value = value ? parseFloat(value) : null;
+        } else if (key === 'backlogs') {
+          value = value ? parseInt(value) : 0;
+        } else if (key === 'isPlaced') {
+          value = value === 'Yes' || value === '1' || value === 1 ? 1 : 0;
+        } else if (key === 'dob' && value) {
+          // Ensure proper date format
+          value = new Date(value).toISOString().split('T')[0];
+        }
+        
+        studentValues.push(value);
+      }
+    });
+
+    // Handle profile photo separately if it's a base64 string
+    if (updateData.profile_photo) {
+      studentFields.push('profile_photo = ?');
+      
+      let photoData = updateData.profile_photo;
+      if (photoData.startsWith('data:image')) {
+        // Extract base64 data
+        photoData = photoData.split(',')[1];
+      }
+      
+      studentValues.push(photoData);
+    }
+
+    if (studentFields.length > 0) {
+      studentValues.push(studentId);
+      await connection.query(
+        `UPDATE students SET ${studentFields.join(', ')} WHERE user_id = ?`,
+        studentValues
+      );
+    }
+
+    await connection.commit();
+    res.json({ message: "Student updated successfully" });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error updating student:", error);
+    res.status(500).json({ message: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+});
+
+// ================== DELETE STUDENT (ADMIN) ==================
+router.delete("/admin/students/:id", authenticateToken, async (req, res) => {
+  const connection = await getMySQLPool().getConnection();
+  
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Unauthorized. Admin access required.' });
+    }
+
+    const studentId = req.params.id;
+
+    await connection.beginTransaction();
+
+    // Delete from students table first (foreign key constraint)
+    await connection.query("DELETE FROM students WHERE user_id = ?", [studentId]);
+    
+    // Delete from users table
+    await connection.query("DELETE FROM users WHERE user_id = ?", [studentId]);
+
+    await connection.commit();
+    res.json({ message: "Student deleted successfully" });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error deleting student:", error);
+    res.status(500).json({ message: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+});
+
+// ================== ENHANCED REGISTER ENDPOINT FOR SINGLE STUDENTS ==================
+// Update your existing register endpoint to handle student-specific fields
+router.post("/register", upload.single('photo'), async (req, res) => {
+  const connection = await getMySQLPool().getConnection();
+  
+  try {
+    const { 
+      name, 
+      email, 
+      password, 
+      role = 'student',
+      // Student-specific fields
+      dob,
+      gender,
+      contact,
+      address,
+      roll_no,
+      college,
+      department,
+      year_of_study,
+      cgpa,
+      marks_10,
+      marks_12,
+      backlogs,
+      skills,
+      certifications,
+      projects,
+      resume_url,
+      job_roles,
+      job_locations,
+      placement_status,
+      isPlaced
+    } = req.body;
+
+    // Validation
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email, and password are required" });
+    }
+
+    await connection.beginTransaction();
+
+    // Check if email already exists
+    const [existingUser] = await connection.query(
+      "SELECT * FROM users WHERE email = ?", 
+      [email]
+    );
+    
+    if (existingUser.length > 0) {
+      return res.status(400).json({ message: "Email already registered" });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Insert into users table
+    const [userResult] = await connection.query(
+      "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
+      [name, email, hashedPassword, role]
+    );
+
+    const userId = userResult.insertId;
+
+    // If registering a student, add to students table
+    if (role === 'student') {
+      // Handle photo upload
+      let profilePhoto = null;
+      if (req.file) {
+        profilePhoto = req.file.buffer.toString('base64');
+      }
+
+      await connection.query(
+        `INSERT INTO students 
+         (user_id, dob, gender, contact, address, roll_no, college, department, 
+          year_of_study, cgpa, marks_10, marks_12, backlogs, skills, 
+          certifications, projects, resume_url, job_roles, job_locations, 
+          placement_status, isPlaced, profile_photo) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          userId,
+          dob || null,
+          gender || null,
+          contact || null,
+          address || null,
+          roll_no || null,
+          college || null,
+          department || null,
+          year_of_study || null,
+          cgpa ? parseFloat(cgpa) : null,
+          marks_10 ? parseFloat(marks_10) : null,
+          marks_12 ? parseFloat(marks_12) : null,
+          backlogs ? parseInt(backlogs) : 0,
+          skills || null,
+          certifications || null,
+          projects || null,
+          resume_url || null,
+          job_roles || null,
+          job_locations || null,
+          placement_status || null,
+          isPlaced === '1' || isPlaced === 1 ? 1 : 0,
+          profilePhoto
+        ]
+      );
+    }
+
+    await connection.commit();
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { user_id: userId, email: email, role: role },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    res.status(201).json({
+      message: "Registration successful",
+      token: token,
+      user: {
+        user_id: userId,
+        name: name,
+        email: email,
+        role: role
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Registration error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+});
 export default router;
