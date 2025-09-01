@@ -11,7 +11,7 @@ const navigationConfig = {
     { name: 'Dashboard', path: '/admin/dashboard', icon: Home },
     { name: 'Manage Training', path: '/admin/training', icon: BookOpen },
     { name: 'Verify Recruiters', path: '/admin/verify', icon: UserCheck },
-    { name: 'Monitor Data', path: '/admin/monitor', icon: BarChart },
+    // { name: 'Monitor Data', path: '/admin/monitor', icon: BarChart },
     { name: 'Reports', path: '/admin/reports', icon: FileText },
     { name: 'Settings', path: '/admin/settings', icon: Settings }
   ],
