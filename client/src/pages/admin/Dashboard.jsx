@@ -1,13 +1,64 @@
+import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
-import { Users, UserCheck, FileText, TrendingUp } from 'lucide-react';
+import { Users, UserCheck, FileText, TrendingUp, Loader } from 'lucide-react';
 
 export default function AdminDashboard() {
-  // This would come from API calls
-  const stats = {
-    totalStudents: 1250,
-    totalRecruiters: 89,
-    pendingVerifications: 12,
-    totalPlacements: 450
+  const [stats, setStats] = useState({
+    totalStudents: 0,
+    totalRecruiters: 0,
+    pendingVerifications: 0,
+    totalPlacements: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, []);
+
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading(true);
+      // Get token from localStorage or wherever you store it
+      const token = localStorage.getItem('token'); // Adjust based on your token storage method
+      
+      console.log('Fetching dashboard stats...');
+      console.log('Token:', token ? 'Present' : 'Missing');
+      
+      const response = await fetch('http://localhost:5000/api/auth/admin/dashboard-stats', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+      
+      try {
+        const data = JSON.parse(responseText);
+        console.log('Parsed data:', data);
+        setStats(data);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        throw new Error('Invalid JSON response from server');
+      }
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching dashboard stats:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const StatCard = ({ title, value, icon: Icon, color }) => (
@@ -15,7 +66,14 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-3xl font-bold text-gray-900">{value}</p>
+          {loading ? (
+            <div className="flex items-center">
+              <Loader className="h-6 w-6 animate-spin text-gray-400 mr-2" />
+              <p className="text-xl font-bold text-gray-400">Loading...</p>
+            </div>
+          ) : (
+            <p className="text-3xl font-bold text-gray-900">{value.toLocaleString()}</p>
+          )}
         </div>
         <div className={`p-3 rounded-full ${color}`}>
           <Icon className="h-6 w-6 text-white" />
@@ -23,6 +81,25 @@ export default function AdminDashboard() {
       </div>
     </div>
   );
+
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-red-600 text-lg">Error loading dashboard</p>
+            <p className="text-gray-500">{error}</p>
+            <button 
+              onClick={fetchDashboardStats}
+              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -70,13 +147,13 @@ export default function AdminDashboard() {
               <p className="font-medium text-blue-900">Manage Training Content</p>
               <p className="text-sm text-blue-600">Add or update training materials</p>
             </button>
-            
+                        
             <button className="p-4 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors">
               <UserCheck className="h-8 w-8 text-green-600 mb-2" />
               <p className="font-medium text-green-900">Verify Recruiters</p>
               <p className="text-sm text-green-600">Review pending recruiter applications</p>
             </button>
-            
+                        
             <button className="p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors">
               <TrendingUp className="h-8 w-8 text-purple-600 mb-2" />
               <p className="font-medium text-purple-900">View Reports</p>
