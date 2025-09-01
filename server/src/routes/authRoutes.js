@@ -392,9 +392,43 @@ router.get("/profile", authenticateToken, async (req, res) => {
 
       res.json(formattedProfile);
     }
-    // Handle other roles (admin/recruiter) similarly
+    else if (role === 'admin') {
+      // Handle admin profile fetching
+      const [rows] = await pool.query(`
+        SELECT 
+          u.id,
+          u.name,
+          u.email,
+          a.designation,
+          a.contact_number,
+          a.official_email,
+          a.access_role,
+          CASE WHEN a.profile_photo IS NOT NULL THEN 1 ELSE 0 END as profile_photo
+        FROM users u
+        LEFT JOIN admins a ON u.id = a.user_id
+        WHERE u.id = ?
+      `, [userId]);
+
+      if (rows.length === 0) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const profile = rows[0];
+      const formattedProfile = {
+        id: profile.id,
+        name: profile.name || '',
+        email: profile.email || '',
+        designation: profile.designation || '',
+        contact_number: profile.contact_number || '',
+        official_email: profile.official_email || '',
+        access_role: profile.access_role || 'coordinator',
+        profile_photo: profile.profile_photo
+      };
+
+      res.json(formattedProfile);
+    }
     else {
-      // For now, just return basic user info for non-student roles
+      // For other roles, just return basic user info
       const [rows] = await pool.query(
         "SELECT id, name, email FROM users WHERE id = ?",
         [userId]
@@ -518,6 +552,7 @@ router.get("/profile/photo/:userId", async (req, res) => {
   }
 });
 // Add this to your authRoutes.js
+// ================== UPDATE PROFILE ==================
 router.put("/profile", authenticateToken, upload.single("photo"), async (req, res) => {
   try {
     const pool = getMySQLPool();
@@ -525,13 +560,38 @@ router.put("/profile", authenticateToken, upload.single("photo"), async (req, re
     const role = req.user.role;
     
     if (role === 'student') {
-      // Update students table
       const {
         name, email, dob, gender, contact, address, roll_no, college,
         department, year_of_study, cgpa, marks_10, marks_12, backlogs,
         skills, certifications, projects, resume_url, job_roles,
         job_locations, placement_status
       } = req.body;
+
+      // Helper function to format date for MySQL DATE column
+      const formatDateForDB = (dateString) => {
+        if (!dateString || dateString === '') return null;
+        
+        try {
+          // Handle various date formats
+          const date = new Date(dateString);
+          if (isNaN(date.getTime())) return null;
+          
+          // Return YYYY-MM-DD format for MySQL DATE column
+          return date.toISOString().split('T')[0];
+        } catch (error) {
+          console.error('Error formatting date:', error);
+          return null;
+        }
+      };
+
+      // Convert empty strings to null for numeric fields
+      const numericCgpa = cgpa === '' ? null : parseFloat(cgpa);
+      const numericMarks10 = marks_10 === '' ? null : parseFloat(marks_10);
+      const numericMarks12 = marks_12 === '' ? null : parseFloat(marks_12);
+      const numericBacklogs = backlogs === '' ? 0 : parseInt(backlogs);
+
+      // Format date properly
+      const formattedDob = formatDateForDB(dob);
 
       // Update users table
       await pool.query(
@@ -553,8 +613,8 @@ router.put("/profile", authenticateToken, upload.single("photo"), async (req, re
         backlogs = VALUES(backlogs), skills = VALUES(skills), certifications = VALUES(certifications),
         projects = VALUES(projects), resume_url = VALUES(resume_url), job_roles = VALUES(job_roles),
         job_locations = VALUES(job_locations), placement_status = VALUES(placement_status)
-      `, [userId, dob, gender, contact, address, roll_no, college, department, 
-          year_of_study, cgpa, marks_10, marks_12, backlogs, skills, 
+      `, [userId, formattedDob, gender, contact, address, roll_no, college, department, 
+          year_of_study, numericCgpa, numericMarks10, numericMarks12, numericBacklogs, skills, 
           certifications, projects, resume_url, job_roles, job_locations, placement_status]);
 
       // Handle photo upload if present
@@ -564,12 +624,46 @@ router.put("/profile", authenticateToken, upload.single("photo"), async (req, re
           [req.file.buffer, userId]
         );
       }
-    }
-    // ... handle other roles (admin/recruiter) similarly
 
-    res.json({ message: "Profile updated successfully" });
+      res.json({ message: "Profile updated successfully" });
+    }
+    // Handle other roles (admin/recruiter) similarly
+    else if (role === 'admin') {
+      // Add admin profile update logic here if needed
+      const { name, email, designation, contact_number, official_email, access_role } = req.body;
+      
+      // Update users table
+      await pool.query(
+        "UPDATE users SET name = ?, email = ? WHERE id = ?",
+        [name, email, userId]
+      );
+
+      // Update or insert into admins table
+      await pool.query(`
+        INSERT INTO admins (user_id, designation, contact_number, official_email, access_role)
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+        designation = VALUES(designation), 
+        contact_number = VALUES(contact_number), 
+        official_email = VALUES(official_email), 
+        access_role = VALUES(access_role)
+      `, [userId, designation || null, contact_number || null, official_email || null, access_role || 'coordinator']);
+
+      // Handle photo upload if present
+      if (req.file) {
+        await pool.query(
+          "UPDATE admins SET profile_photo = ? WHERE user_id = ?",
+          [req.file.buffer, userId]
+        );
+      }
+
+      res.json({ message: "Admin profile updated successfully" });
+    }
+    else {
+      res.status(400).json({ message: "Profile update not implemented for this role" });
+    }
   } catch (err) {
-    console.error(err);
+    console.error('Error updating profile:', err);
     res.status(500).json({ message: "Server error" });
   }
 });

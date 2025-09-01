@@ -39,61 +39,92 @@ export default function StudentProfile() {
     fetchProfile();
   }, []);
 
-// Update the fetchProfile function in your StudentProfile component
+  // Helper function to format date for HTML input
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    
+    try {
+      // Handle both ISO dates and MySQL DATE format
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      
+      // Return YYYY-MM-DD format for HTML date input
+      return date.toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '';
+    }
+  };
 
-const fetchProfile = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    const response = await fetch('http://localhost:5000/api/profile', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+  // Helper function to format date for database (YYYY-MM-DD)
+  const formatDateForDB = (dateString) => {
+    if (!dateString) return null;
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return null;
+      
+      // Return YYYY-MM-DD format for MySQL DATE column
+      return date.toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Error formatting date for DB:', error);
+      return null;
+    }
+  };
 
-    if (response.ok) {
-      const data = await response.json();
-      console.log('Fetched profile data:', data); // Debug log
-
-      // Pre-fill input fields with fetched values
-      setProfile({
-        name: data.name || '',
-        email: data.email || '',
-        dob: data.dob || '', // This should now be in YYYY-MM-DD format
-        gender: data.gender || '',
-        contact: data.contact || '',
-        address: data.address || '',
-        roll_no: data.roll_no || '',
-        college: data.college || '',
-        department: data.department || '',
-        year_of_study: data.year_of_study || '',
-        cgpa: data.cgpa || '',
-        marks_10: data.marks_10 || '',
-        marks_12: data.marks_12 || '',
-        backlogs: data.backlogs || 0,
-        skills: data.skills || '',
-        certifications: data.certifications || '',
-        projects: data.projects || '',
-        resume_url: data.resume_url || '',
-        job_roles: data.job_roles || '',
-        job_locations: data.job_locations || '',
-        placement_status: data.placement_status || '',
-        id: data.id // Use consistent ID field
+  const fetchProfile = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/auth/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
-      // Set photo URL if profile_photo exists
-      if (data.profile_photo) {
-        setPhotoUrl(`http://localhost:5000/api/profile/photo/${data.id}?t=${Date.now()}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Fetched profile data:', data);
+
+        // Pre-fill input fields with fetched values
+        setProfile({
+          name: data.name || '',
+          email: data.email || '',
+          dob: formatDateForInput(data.dob), // Format date for input
+          gender: data.gender || '',
+          contact: data.contact || '',
+          address: data.address || '',
+          roll_no: data.roll_no || '',
+          college: data.college || '',
+          department: data.department || '',
+          year_of_study: data.year_of_study || '',
+          cgpa: data.cgpa || '',
+          marks_10: data.marks_10 || '',
+          marks_12: data.marks_12 || '',
+          backlogs: data.backlogs || 0,
+          skills: data.skills || '',
+          certifications: data.certifications || '',
+          projects: data.projects || '',
+          resume_url: data.resume_url || '',
+          job_roles: data.job_roles || '',
+          job_locations: data.job_locations || '',
+          placement_status: data.placement_status || '',
+          id: data.id
+        });
+
+        // Set photo URL if profile_photo exists
+        if (data.profile_photo) {
+          setPhotoUrl(`http://localhost:5000/api/auth/profile/photo/${data.id}?t=${Date.now()}`);
+        }
+      } else {
+        const err = await response.json();
+        setError(err.message || 'Failed to fetch profile');
       }
-    } else {
-      const err = await response.json();
-      setError(err.message || 'Failed to fetch profile');
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      setError('Network error while fetching profile');
     }
-  } catch (error) {
-    console.error('Error fetching profile:', error);
-    setError('Network error while fetching profile');
-  }
-};
+  };
 
   const handleChange = (e) => {
     setProfile({
@@ -144,10 +175,18 @@ const fetchProfile = async () => {
       // Create FormData to handle both profile data and photo
       const formData = new FormData();
       
-      // Add profile fields
+      // Add profile fields with proper date formatting
       Object.keys(profile).forEach(key => {
-        if (profile[key] !== null && profile[key] !== undefined) {
-          formData.append(key, profile[key]);
+        if (profile[key] !== null && profile[key] !== undefined && profile[key] !== '') {
+          if (key === 'dob') {
+            // Format date properly for database
+            const formattedDate = formatDateForDB(profile[key]);
+            if (formattedDate) {
+              formData.append(key, formattedDate);
+            }
+          } else {
+            formData.append(key, profile[key]);
+          }
         }
       });
       
@@ -156,7 +195,7 @@ const fetchProfile = async () => {
         formData.append('photo', selectedPhoto);
       }
 
-      const response = await fetch('http://localhost:5000/api/profile', {
+      const response = await fetch('http://localhost:5000/api/auth/profile', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -170,10 +209,13 @@ const fetchProfile = async () => {
         
         // Update photo URL if new photo was uploaded
         if (selectedPhoto) {
-          setPhotoUrl(`http://localhost:5000/api/profile/photo/${profile.id}?t=${Date.now()}`);
+          setPhotoUrl(`http://localhost:5000/api/auth/profile/photo/${profile.id}?t=${Date.now()}`);
           setSelectedPhoto(null);
           setPhotoPreview(null);
         }
+        
+        // Refresh profile data to ensure consistency
+        await fetchProfile();
         
         setTimeout(() => setSuccess(''), 3000);
       } else {
