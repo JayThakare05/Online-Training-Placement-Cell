@@ -310,6 +310,270 @@ router.get("/photo/:id", async (req, res) => {
   }
 });
 
+// Add this GET profile route to your authRoutes.js
+
+// ================== GET PROFILE ==================
+router.get("/profile", authenticateToken, async (req, res) => {
+  try {
+    const pool = getMySQLPool();
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    if (role === 'student') {
+      // Get user info and student profile data
+      const [rows] = await pool.query(`
+        SELECT 
+          u.id,
+          u.name,
+          u.email,
+          s.dob,
+          s.gender,
+          s.contact,
+          s.address,
+          s.roll_no,
+          s.college,
+          s.department,
+          s.year_of_study,
+          s.cgpa,
+          s.marks_10,
+          s.marks_12,
+          s.backlogs,
+          s.skills,
+          s.certifications,
+          s.projects,
+          s.resume_url,
+          s.job_roles,
+          s.job_locations,
+          s.placement_status,
+          CASE WHEN s.profile_photo IS NOT NULL THEN 1 ELSE 0 END as profile_photo
+        FROM users u
+        LEFT JOIN students s ON u.id = s.user_id
+        WHERE u.id = ?
+      `, [userId]);
+
+      if (rows.length === 0) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const profile = rows[0];
+      
+      // Format date for HTML input (YYYY-MM-DD)
+      if (profile.dob) {
+        const date = new Date(profile.dob);
+        profile.dob = date.toISOString().split('T')[0];
+      }
+
+      // Ensure all fields have default values
+      const formattedProfile = {
+        id: profile.id,
+        name: profile.name || '',
+        email: profile.email || '',
+        dob: profile.dob || '',
+        gender: profile.gender || '',
+        contact: profile.contact || '',
+        address: profile.address || '',
+        roll_no: profile.roll_no || '',
+        college: profile.college || '',
+        department: profile.department || '',
+        year_of_study: profile.year_of_study || '',
+        cgpa: profile.cgpa || '',
+        marks_10: profile.marks_10 || '',
+        marks_12: profile.marks_12 || '',
+        backlogs: profile.backlogs || 0,
+        skills: profile.skills || '',
+        certifications: profile.certifications || '',
+        projects: profile.projects || '',
+        resume_url: profile.resume_url || '',
+        job_roles: profile.job_roles || '',
+        job_locations: profile.job_locations || '',
+        placement_status: profile.placement_status || '',
+        profile_photo: profile.profile_photo
+      };
+
+      res.json(formattedProfile);
+    }
+    // Handle other roles (admin/recruiter) similarly
+    else {
+      // For now, just return basic user info for non-student roles
+      const [rows] = await pool.query(
+        "SELECT id, name, email FROM users WHERE id = ?",
+        [userId]
+      );
+      
+      if (rows.length === 0) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json(rows[0]);
+    }
+  } catch (err) {
+    console.error('Error fetching profile:', err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ================== UPDATE PROFILE ==================
+router.put("/profile", authenticateToken, upload.single("photo"), async (req, res) => {
+  try {
+    const pool = getMySQLPool();
+    const userId = req.user.id;
+    const role = req.user.role;
+    
+    if (role === 'student') {
+      const {
+        name, email, dob, gender, contact, address, roll_no, college,
+        department, year_of_study, cgpa, marks_10, marks_12, backlogs,
+        skills, certifications, projects, resume_url, job_roles,
+        job_locations, placement_status
+      } = req.body;
+
+      // Convert empty strings to null for numeric fields
+      const numericCgpa = cgpa === '' ? null : parseFloat(cgpa);
+      const numericMarks10 = marks_10 === '' ? null : parseFloat(marks_10);
+      const numericMarks12 = marks_12 === '' ? null : parseFloat(marks_12);
+      const numericBacklogs = backlogs === '' ? 0 : parseInt(backlogs);
+
+      // Convert empty date to null
+      const formattedDob = dob === '' ? null : dob;
+
+      // Update users table
+      await pool.query(
+        "UPDATE users SET name = ?, email = ? WHERE id = ?",
+        [name, email, userId]
+      );
+
+      // Update or insert into students table
+      await pool.query(`
+        INSERT INTO students (user_id, dob, gender, contact, address, roll_no, college, 
+        department, year_of_study, cgpa, marks_10, marks_12, backlogs, skills, 
+        certifications, projects, resume_url, job_roles, job_locations, placement_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+        dob = VALUES(dob), gender = VALUES(gender), contact = VALUES(contact),
+        address = VALUES(address), roll_no = VALUES(roll_no), college = VALUES(college),
+        department = VALUES(department), year_of_study = VALUES(year_of_study),
+        cgpa = VALUES(cgpa), marks_10 = VALUES(marks_10), marks_12 = VALUES(marks_12),
+        backlogs = VALUES(backlogs), skills = VALUES(skills), certifications = VALUES(certifications),
+        projects = VALUES(projects), resume_url = VALUES(resume_url), job_roles = VALUES(job_roles),
+        job_locations = VALUES(job_locations), placement_status = VALUES(placement_status)
+      `, [userId, formattedDob, gender, contact, address, roll_no, college, department, 
+          year_of_study, numericCgpa, numericMarks10, numericMarks12, numericBacklogs, skills, 
+          certifications, projects, resume_url, job_roles, job_locations, placement_status]);
+
+      // Handle photo upload if present
+      if (req.file) {
+        await pool.query(
+          "UPDATE students SET profile_photo = ? WHERE user_id = ?",
+          [req.file.buffer, userId]
+        );
+      }
+
+      res.json({ message: "Profile updated successfully" });
+    }
+    // Handle other roles (admin/recruiter) similarly
+    else {
+      res.status(400).json({ message: "Profile update not implemented for this role" });
+    }
+  } catch (err) {
+    console.error('Error updating profile:', err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ================== GET PHOTO ==================
+router.get("/profile/photo/:userId", async (req, res) => {
+  try {
+    const pool = getMySQLPool();
+    const userId = req.params.userId;
+
+    // Find user role first
+    const [userRows] = await pool.query(
+      "SELECT role FROM users WHERE id = ?",
+      [userId]
+    );
+    
+    if (userRows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    let table;
+    if (userRows[0].role === "student") table = "students";
+    else if (userRows[0].role === "recruiter") table = "recruiters";
+    else table = "admins";
+
+    const [rows] = await pool.query(
+      `SELECT profile_photo FROM ${table} WHERE user_id = ?`,
+      [userId]
+    );
+
+    if (rows.length === 0 || !rows[0].profile_photo) {
+      return res.status(404).json({ message: "No photo found" });
+    }
+
+    res.set("Content-Type", "image/jpeg");
+    res.send(rows[0].profile_photo);
+  } catch (err) {
+    console.error('Error fetching photo:', err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+// Add this to your authRoutes.js
+router.put("/profile", authenticateToken, upload.single("photo"), async (req, res) => {
+  try {
+    const pool = getMySQLPool();
+    const userId = req.user.id;
+    const role = req.user.role;
+    
+    if (role === 'student') {
+      // Update students table
+      const {
+        name, email, dob, gender, contact, address, roll_no, college,
+        department, year_of_study, cgpa, marks_10, marks_12, backlogs,
+        skills, certifications, projects, resume_url, job_roles,
+        job_locations, placement_status
+      } = req.body;
+
+      // Update users table
+      await pool.query(
+        "UPDATE users SET name = ?, email = ? WHERE id = ?",
+        [name, email, userId]
+      );
+
+      // Update or insert into students table
+      await pool.query(`
+        INSERT INTO students (user_id, dob, gender, contact, address, roll_no, college, 
+        department, year_of_study, cgpa, marks_10, marks_12, backlogs, skills, 
+        certifications, projects, resume_url, job_roles, job_locations, placement_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+        dob = VALUES(dob), gender = VALUES(gender), contact = VALUES(contact),
+        address = VALUES(address), roll_no = VALUES(roll_no), college = VALUES(college),
+        department = VALUES(department), year_of_study = VALUES(year_of_study),
+        cgpa = VALUES(cgpa), marks_10 = VALUES(marks_10), marks_12 = VALUES(marks_12),
+        backlogs = VALUES(backlogs), skills = VALUES(skills), certifications = VALUES(certifications),
+        projects = VALUES(projects), resume_url = VALUES(resume_url), job_roles = VALUES(job_roles),
+        job_locations = VALUES(job_locations), placement_status = VALUES(placement_status)
+      `, [userId, dob, gender, contact, address, roll_no, college, department, 
+          year_of_study, cgpa, marks_10, marks_12, backlogs, skills, 
+          certifications, projects, resume_url, job_roles, job_locations, placement_status]);
+
+      // Handle photo upload if present
+      if (req.file) {
+        await pool.query(
+          "UPDATE students SET profile_photo = ? WHERE user_id = ?",
+          [req.file.buffer, userId]
+        );
+      }
+    }
+    // ... handle other roles (admin/recruiter) similarly
+
+    res.json({ message: "Profile updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // ================== ADMIN DASHBOARD STATS (WITH DEBUG) ==================
 router.get("/admin/dashboard-stats", authenticateToken, async (req, res) => {
   console.log("Dashboard stats route hit");
