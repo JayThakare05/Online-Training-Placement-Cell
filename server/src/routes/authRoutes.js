@@ -692,5 +692,159 @@ router.get("/admin/students", authenticateToken, async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 });
+// ================== UPDATE STUDENT (ADMIN ONLY) ==================
+router.put("/admin/students/:studentId", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized. Admin access required." });
+    }
+
+    const { studentId } = req.params;
+    const {
+      name,
+      email,
+      dob,
+      gender,
+      contact,
+      address,
+      roll_no,
+      college,
+      department,
+      year_of_study,
+      cgpa,
+      marks_10,
+      marks_12,
+      backlogs,
+      skills,
+      certifications,
+      projects,
+      resume_url,
+      job_roles,
+      job_locations,
+      placement_status,
+      profile_photo,
+      isPlaced,
+    } = req.body;
+
+    const pool = getMySQLPool();
+
+    // ✅ Update users table first
+    if (name || email) {
+      await pool.query(
+        `UPDATE users 
+         SET name = COALESCE(?, name), 
+             email = COALESCE(?, email)
+         WHERE id = (SELECT user_id FROM students WHERE student_id = ?)`,
+        [name, email, studentId]
+      );
+    }
+
+    // ✅ Convert base64 photo (if provided) into buffer
+    let profilePhotoBuffer = null;
+    if (profile_photo && profile_photo.startsWith("data:image")) {
+      const base64Data = profile_photo.split(",")[1]; // remove data:image/jpeg;base64,
+      profilePhotoBuffer = Buffer.from(base64Data, "base64");
+    }
+
+    // ✅ Update students table
+    await pool.query(
+      `UPDATE students 
+       SET dob = COALESCE(?, dob),
+           gender = COALESCE(?, gender),
+           contact = COALESCE(?, contact),
+           address = COALESCE(?, address),
+           roll_no = COALESCE(?, roll_no),
+           college = COALESCE(?, college),
+           department = COALESCE(?, department),
+           year_of_study = COALESCE(?, year_of_study),
+           cgpa = COALESCE(?, cgpa),
+           marks_10 = COALESCE(?, marks_10),
+           marks_12 = COALESCE(?, marks_12),
+           backlogs = COALESCE(?, backlogs),
+           skills = COALESCE(?, skills),
+           certifications = COALESCE(?, certifications),
+           projects = COALESCE(?, projects),
+           resume_url = COALESCE(?, resume_url),
+           job_roles = COALESCE(?, job_roles),
+           job_locations = COALESCE(?, job_locations),
+           placement_status = COALESCE(?, placement_status),
+           profile_photo = COALESCE(?, profile_photo),
+           isPlaced = COALESCE(?, isPlaced)
+       WHERE student_id = ?`,
+      [
+        dob || null,
+        gender,
+        contact,
+        address,
+        roll_no,
+        college,
+        department,
+        year_of_study,
+        cgpa,
+        marks_10,
+        marks_12,
+        backlogs,
+        skills,
+        certifications,
+        projects,
+        resume_url,
+        job_roles,
+        job_locations,
+        placement_status,
+        profilePhotoBuffer, // ✅ binary image buffer
+        isPlaced !== undefined ? isPlaced : null,
+        studentId,
+      ]
+    );
+
+    res.json({ message: "Student updated successfully" });
+  } catch (error) {
+    console.error("Error updating student:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+});
+
+
+// ================== DELETE STUDENT (ADMIN ONLY) ==================
+router.delete("/admin/students/:studentId", authenticateToken, async (req, res) => {
+  const connection = await getMySQLPool().getConnection();
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized. Admin access required." });
+    }
+
+    const { studentId } = req.params;
+
+    await connection.beginTransaction();
+
+    // 🔹 Get user_id for this student
+    const [rows] = await connection.query(
+      "SELECT user_id FROM students WHERE student_id = ?",
+      [studentId]
+    );
+
+    if (rows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const userId = rows[0].user_id;
+
+    // 🔹 Delete from students (first, due to FK)
+    await connection.query("DELETE FROM students WHERE student_id = ?", [studentId]);
+
+    // 🔹 Delete from users
+    await connection.query("DELETE FROM users WHERE id = ?", [userId]);
+
+    await connection.commit();
+    res.json({ message: "Student deleted successfully" });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error deleting student:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  } finally {
+    connection.release();
+  }
+});
 
 export default router;
