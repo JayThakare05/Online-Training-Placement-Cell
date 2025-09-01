@@ -1804,7 +1804,7 @@ router.get("/recruiter-profile", authenticateToken, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
+ 
 // ================== UPDATE RECRUITER PROFILE ==================
 router.put("/recruiter-profile", authenticateToken, upload.single("photo"), async (req, res) => {
   try {
