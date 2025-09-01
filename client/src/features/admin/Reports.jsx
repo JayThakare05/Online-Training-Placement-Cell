@@ -2,13 +2,16 @@ import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { 
   Download, Calendar, Filter, TrendingUp, 
-  Users, Briefcase, GraduationCap, BarChart3 
+  Users, Briefcase, GraduationCap, BarChart3, 
+  CheckCircle, Clock, Building
 } from 'lucide-react';
 
 export default function Reports() {
   const [selectedReport, setSelectedReport] = useState('overview');
   const [dateRange, setDateRange] = useState('last30days');
   const [reportData, setReportData] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const reportTypes = [
     { id: 'overview', name: 'Platform Overview', icon: BarChart3 },
@@ -18,41 +21,111 @@ export default function Reports() {
     { id: 'engagement', name: 'User Engagement', icon: Users }
   ];
 
+  // Function to get date range filter for SQL queries
+  const getDateFilter = () => {
+    const now = new Date();
+    let startDate;
+    
+    switch (dateRange) {
+      case 'last7days':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'last30days':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'last90days':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+    
+    return startDate.toISOString().split('T')[0];
+  };
+
+  // Fetch platform overview data
+  const fetchOverviewData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const startDate = getDateFilter();
+      
+      const response = await fetch(`http://localhost:5000/api/reports/overview?startDate=${startDate}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch overview data');
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching overview data:', error);
+      throw error;
+    }
+  };
+
+  // Fetch student analytics data
+  const fetchStudentData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const startDate = getDateFilter();
+      
+      const response = await fetch(`http://localhost:5000/api/reports/students?startDate=${startDate}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch student data');
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching student data:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
-    // Mock report data - replace with API calls
-    const mockData = {
-      overview: {
-        totalUsers: 1504,
-        activeUsers: 892,
-        newSignups: 127,
-        placementRate: 78.5,
-        topSkills: ['JavaScript', 'Python', 'React', 'Node.js', 'SQL'],
-        monthlyGrowth: 12.3
-      },
-      students: {
-        totalStudents: 1250,
-        activeStudents: 734,
-        completionRate: 65.8,
-        averageScore: 7.4,
-        popularCourses: [
-          { name: 'Full Stack Development', enrollments: 456 },
-          { name: 'Data Science', enrollments: 234 },
-          { name: 'Mobile App Development', enrollments: 189 }
-        ]
+    const loadReportData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        let data = {};
+        
+        if (selectedReport === 'overview') {
+          data.overview = await fetchOverviewData();
+        } else if (selectedReport === 'students') {
+          data.students = await fetchStudentData();
+        }
+        
+        setReportData(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
     };
-    setReportData(mockData);
+
+    loadReportData();
   }, [selectedReport, dateRange]);
 
-  const StatCard = ({ title, value, change, icon: Icon, color }) => (
+  const StatCard = ({ title, value, change, icon: Icon, color, subtitle }) => (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600">{title}</p>
           <p className="text-3xl font-bold text-gray-900">{value}</p>
+          {subtitle && (
+            <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+          )}
           {change && (
             <p className={`text-sm mt-1 ${change > 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {change > 0 ? '+' : ''}{change}% from last period
+              {change > 0 ? '+' : ''}{change}% from previous period
             </p>
           )}
         </div>
@@ -66,27 +139,45 @@ export default function Reports() {
   const renderOverviewReport = () => {
     const data = reportData.overview || {};
     
+    if (loading) {
+      return (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse">
+                <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                <div className="h-8 bg-gray-200 rounded mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             title="Total Users"
             value={data.totalUsers?.toLocaleString() || '0'}
-            change={data.monthlyGrowth}
+            change={data.userGrowth}
             icon={Users}
             color="bg-blue-500"
           />
           <StatCard
-            title="Active Users"
-            value={data.activeUsers?.toLocaleString() || '0'}
-            icon={TrendingUp}
+            title="Verified Recruiters"
+            value={data.verifiedRecruiters?.toLocaleString() || '0'}
+            icon={CheckCircle}
             color="bg-green-500"
+            subtitle="Active companies"
           />
           <StatCard
-            title="New Signups"
+            title="New Registrations"
             value={data.newSignups || '0'}
             icon={GraduationCap}
             color="bg-purple-500"
+            subtitle={`Last ${dateRange.replace('last', '').replace('days', ' days')}`}
           />
           <StatCard
             title="Placement Rate"
@@ -100,30 +191,37 @@ export default function Reports() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Skills in Demand</h3>
             <div className="space-y-3">
-              {data.topSkills?.map((skill, index) => (
-                <div key={skill} className="flex items-center justify-between">
-                  <span className="text-gray-900">{skill}</span>
+              {data.topSkills?.length > 0 ? data.topSkills.map((skill, index) => (
+                <div key={skill.skill} className="flex items-center justify-between">
+                  <span className="text-gray-900">{skill.skill}</span>
                   <div className="flex items-center space-x-2">
                     <div className="w-24 bg-gray-200 rounded-full h-2">
                       <div 
                         className="bg-blue-500 h-2 rounded-full" 
-                        style={{width: `${90 - (index * 15)}%`}}
+                        style={{width: `${skill.percentage}%`}}
                       ></div>
                     </div>
-                    <span className="text-sm text-gray-600">{90 - (index * 15)}%</span>
+                    <span className="text-sm text-gray-600">{skill.count} jobs</span>
                   </div>
                 </div>
-              )) || <p className="text-gray-500">No data available</p>}
+              )) : <p className="text-gray-500">No data available</p>}
             </div>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Growth Trend</h3>
-            <div className="h-48 bg-gray-100 rounded-lg flex items-center justify-center">
-              <div className="text-center">
-                <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-600">Chart visualization</p>
-                <p className="text-sm text-gray-500">Integration needed</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Registration Trend</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-700">Students</span>
+                <span className="text-blue-600 font-semibold">{data.studentRegistrations || 0}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-700">Recruiters</span>
+                <span className="text-green-600 font-semibold">{data.recruiterRegistrations || 0}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-700">Admins</span>
+                <span className="text-purple-600 font-semibold">{data.adminRegistrations || 0}</span>
               </div>
             </div>
           </div>
@@ -135,9 +233,25 @@ export default function Reports() {
   const renderStudentReport = () => {
     const data = reportData.students || {};
     
+    if (loading) {
+      return (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse">
+                <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                <div className="h-8 bg-gray-200 rounded mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <StatCard
             title="Total Students"
             value={data.totalStudents?.toLocaleString() || '0'}
@@ -145,34 +259,43 @@ export default function Reports() {
             color="bg-blue-500"
           />
           <StatCard
-            title="Active Students"
-            value={data.activeStudents?.toLocaleString() || '0'}
-            icon={GraduationCap}
+            title="Placed Students"
+            value={data.placedStudents?.toLocaleString() || '0'}
+            icon={CheckCircle}
             color="bg-green-500"
           />
           <StatCard
-            title="Completion Rate"
-            value={`${data.completionRate || 0}%`}
+            title="Job Ready"
+            value={data.jobReadyStudents?.toLocaleString() || '0'}
             icon={TrendingUp}
             color="bg-purple-500"
-          />
-                    <StatCard
-            title="Average Score"
-            value={data.averageScore || 0}
-            icon={BarChart3}
-            color="bg-orange-500"
+            subtitle="With resume & skills"
           />
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Popular Courses</h3>
-          <div className="space-y-3">
-            {data.popularCourses?.map((course) => (
-              <div key={course.name} className="flex items-center justify-between">
-                <span className="text-gray-900">{course.name}</span>
-                <span className="text-sm text-gray-600">{course.enrollments} enrollments</span>
-              </div>
-            )) || <p className="text-gray-500">No data available</p>}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Departments</h3>
+            <div className="space-y-3">
+              {data.topDepartments?.length > 0 ? data.topDepartments.map((dept) => (
+                <div key={dept.department} className="flex items-center justify-between">
+                  <span className="text-gray-900">{dept.department || 'Not specified'}</span>
+                  <span className="text-sm text-gray-600">{dept.count} students</span>
+                </div>
+              )) : <p className="text-gray-500">No data available</p>}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Colleges</h3>
+            <div className="space-y-3">
+              {data.topColleges?.length > 0 ? data.topColleges.map((college) => (
+                <div key={college.college} className="flex items-center justify-between">
+                  <span className="text-gray-900">{college.college || 'Not specified'}</span>
+                  <span className="text-sm text-gray-600">{college.count} students</span>
+                </div>
+              )) : <p className="text-gray-500">No data available</p>}
+            </div>
           </div>
         </div>
       </div>
@@ -180,6 +303,20 @@ export default function Reports() {
   };
 
   const renderReport = () => {
+    if (error) {
+      return (
+        <div className="p-6 bg-red-50 border border-red-200 rounded-lg text-center">
+          <p className="text-red-600">Error loading report data: {error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+
     switch (selectedReport) {
       case 'overview':
         return renderOverviewReport();
@@ -231,8 +368,8 @@ export default function Reports() {
               <button
                 key={report.id}
                 onClick={() => setSelectedReport(report.id)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg border ${
-                  isActive ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-200'
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg border whitespace-nowrap ${
+                  isActive ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 <Icon className="h-5 w-5" />
