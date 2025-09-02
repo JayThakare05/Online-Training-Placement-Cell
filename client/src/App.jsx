@@ -28,7 +28,7 @@ import CodingBattle from './features/student/CodingBattle';
 import JobApplications from './features/student/JobApplications';
 import MockInterviews from './features/student/MockInterviews';
 import UploadResume from './features/student/UploadResume';
-
+import Courses from './features/student/Courses';
 
 // Protected Route Component
 function ProtectedRoute({ children, allowedRole }) {
@@ -182,10 +182,18 @@ function App() {
             } 
           />
           <Route 
-            path="/student/applications" 
+            path="/student/coding" 
             element={
               <ProtectedRoute allowedRole="student">
-                <JobApplications />
+                <CodingBattle />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/student/courses" 
+            element={
+              <ProtectedRoute allowedRole="student">
+                <Courses/>
               </ProtectedRoute>
             } 
           />
