@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, BarChart, Settings, 
   UserCheck, Briefcase, BookOpen, Trophy,
   Calendar, MessageSquare, Search, Upload,
-  GraduationCap,Book   // ✅ add this
+  GraduationCap,Book,Code2   // ✅ add this
 } from 'lucide-react';
 
 
@@ -16,7 +16,8 @@ const navigationConfig = {
     { name: 'Verify Recruiters', path: '/admin/verify', icon: UserCheck },
     // { name: 'Monitor Data', path: '/admin/monitor', icon: BarChart },
     { name: 'Reports', path: '/admin/reports', icon: FileText },
-    { name: 'Settings', path: '/admin/settings', icon: Settings }
+    { name: 'Settings', path: '/admin/settings', icon: Settings },
+    { name: 'Upload Coding Questions', path: '/admin/coding-questions', icon: Code2}
   ],
   recruiter: [
     { name: 'Dashboard', path: '/recruiter/dashboard', icon: Home },

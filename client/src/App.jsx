@@ -21,6 +21,7 @@ import VerifyRecruiters from './features/admin/VerifyRecruiters';
 import Reports from './features/admin/Reports';
 import MonitorData from './features/admin/MonitorData';
 import ManageStudents from './features/admin/ManageStudents';
+import UploadCodingQuestions from './features/admin/UploadCodingQuestions';
 
 import PostJob from "./features/recruiter/PostJob";
 
@@ -86,6 +87,14 @@ function App() {
             element={
               <ProtectedRoute allowedRole="admin">
                 <ManageStudents />
+              </ProtectedRoute>
+            }
+          />
+          <Route 
+            path="/admin/coding-questions" 
+            element={
+              <ProtectedRoute allowedRole="admin">
+                <UploadCodingQuestions />
               </ProtectedRoute>
             }
           />
