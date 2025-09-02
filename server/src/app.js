@@ -12,6 +12,7 @@ import reportsRoutes from './routes/reports.js';
 import './models/Content.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import resumeRoutes from './routes/resume.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +35,7 @@ app.use("/api/auth", profileRoutes);       // Profile routes under /api/auth/...
 app.use("/api/jobs", jobRoutes);           // Job routes under /api/jobs/...
 app.use("/api/content", contentRoutes);
 app.use("/api/reports", reportsRoutes);
+app.use("/api/resume", resumeRoutes); 
 
 // Test Route
 app.get("/", (req, res) => {
