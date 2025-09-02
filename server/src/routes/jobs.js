@@ -1,7 +1,7 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import JobPost from '../models/JobPost.js';
-
+import { getMySQLPool } from "../config/db.js";
 const router = express.Router();
 
 // ================== CREATE JOB POST ==================
@@ -13,21 +13,46 @@ router.post('/create', authenticateToken, async (req, res) => {
 
     const pool = getMySQLPool();
     
-    // Verify recruiter is approved
-    const [recruiterStatus] = await pool.query(
-      'SELECT isVerified, company_name, recruiter_name FROM recruiters WHERE user_id = ?',
+    // Verify recruiter is approved - this is the crucial check
+    const [recruiterRows] = await pool.query(
+      `SELECT r.*, u.name, u.email 
+       FROM recruiters r 
+       JOIN users u ON r.user_id = u.id 
+       WHERE r.user_id = ?`,
       [req.user.id]
     );
 
-    if (!recruiterStatus.length || recruiterStatus[0].isVerified !== 1) {
+    if (!recruiterRows.length) {
+      return res.status(404).json({ 
+        message: 'Recruiter profile not found' 
+      });
+    }
+
+    const recruiter = recruiterRows[0];
+    
+    if (recruiter.isVerified !== 1) {
       return res.status(403).json({ 
         message: 'Your recruiter account must be verified to post jobs' 
       });
     }
 
-    // Create job post with recruiter verification status
+    // Create job post with recruiter information
     const jobPostData = {
-      ...req.body,
+      title: req.body.title,
+      description: req.body.description,
+      location: req.body.location,
+      salary: req.body.salary,
+      skills: req.body.skills,
+      type: req.body.type,
+      recruiter: {
+        user_id: req.user.id,
+        name: recruiter.name,
+        email: recruiter.email,
+        company_name: recruiter.company_name,
+        recruiter_name: recruiter.recruiter_name || recruiter.name,
+        designation: recruiter.designation,
+        contact_number: recruiter.contact_number
+      },
       isVerifiedRecruiter: true
     };
 
@@ -44,6 +69,7 @@ router.post('/create', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 // ================== GET ALL JOB POSTS ==================
 router.get('/posts', async (req, res) => {

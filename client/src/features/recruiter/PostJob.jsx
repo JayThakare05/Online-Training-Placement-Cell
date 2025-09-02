@@ -25,7 +25,7 @@ export default function PostJob() {
   const fetchRecruiterInfo = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/auth/recruiter-profile', {
+      const response = await fetch('http://localhost:5000/api/auth/recruiter-profile', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -62,71 +62,63 @@ export default function PostJob() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Double check verification status before allowing submission
-    if (verificationStatus?.status !== "approved") {
-      alert('Your account must be verified before posting jobs');
-      return;
-    }
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  // Frontend validation (can be bypassed, so backend validation is crucial)
+  if (verificationStatus?.status !== "approved") {
+    alert('Your account must be verified before posting jobs');
+    return;
+  }
 
-    
-    if (!recruiterInfo) {
-      alert('Please complete your profile first');
-      return;
-    }
+  setLoading(true);
 
-    setLoading(true);
+  try {
+    const token = localStorage.getItem('token');
+    const jobPostData = {
+      title: formData.title,
+      description: formData.description,
+      location: formData.location,
+      salary: formData.salary,
+      skills: formData.skills,
+      type: formData.type,
+      // Don't send the entire recruiter object, just the ID
+      // The backend should fetch the latest recruiter info
+    };
 
-    try {
-      const token = localStorage.getItem('token');
-      const jobPostData = {
-        ...formData,
-        recruiter: {
-          user_id: recruiterInfo.id,
-          name: recruiterInfo.name,
-          email: recruiterInfo.email,
-          company_name: recruiterInfo.company_name || 'Not specified',
-          recruiter_name: recruiterInfo.recruiter_name || recruiterInfo.name,
-          designation: recruiterInfo.designation,
-          contact_number: recruiterInfo.contact_number
-        }
-      };
+    const response = await fetch('http://localhost:5000/api/jobs/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(jobPostData)
+    });
 
-      const response = await fetch('/api/jobs/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(jobPostData)
+    if (response.ok) {
+      const result = await response.json();
+      alert('Job posted successfully!');
+      
+      // Reset form
+      setFormData({
+        title: "",
+        description: "",
+        location: "",
+        salary: "",
+        skills: "",
+        type: "Full-time",
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        alert('Job posted successfully!');
-        
-        // Reset form
-        setFormData({
-          title: "",
-          description: "",
-          location: "",
-          salary: "",
-          skills: "",
-          type: "Full-time",
-        });
-      } else {
-        const error = await response.json();
-        alert('Error posting job: ' + error.message);
-      }
-    } catch (error) {
-      console.error('Error posting job:', error);
-      alert('Error posting job. Please try again.');
-    } finally {
-      setLoading(false);
+    } else {
+      const error = await response.json();
+      alert('Error posting job: ' + error.message);
     }
-  };
+  } catch (error) {
+    console.error('Error posting job:', error);
+    alert('Error posting job. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Show loading while fetching initial data
   if (pageLoading) {
