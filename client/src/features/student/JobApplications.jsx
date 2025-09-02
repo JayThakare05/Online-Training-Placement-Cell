@@ -13,7 +13,79 @@ function JobCard({ job }) {
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState("");
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [applying, setApplying] = useState(false);
+  const [applicationStatus, setApplicationStatus] = useState({});
 
+  const handleApply = async () => {
+  try {
+    setApplying(true);
+    const token = localStorage.getItem("token");
+    
+    if (!token) {
+      alert("You need to be logged in to apply for jobs");
+      return;
+    }
+
+    const response = await fetch(`http://localhost:5000/api/jobs/posts/${job._id}/apply`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.message || "Failed to apply for job");
+    }
+
+    // Update application status
+    setApplicationStatus(prev => ({
+      ...prev,
+      [job._id]: { 
+        applied: true, 
+        message: result.message,
+        status: 'applied'
+      }
+    }));
+    
+    alert("Application submitted successfully!");
+  } catch (error) {
+    console.error("Error applying to job:", error);
+    alert(error.message || "Failed to apply for job. Please try again.");
+  } finally {
+    setApplying(false);
+  }
+};
+
+// Check if user has already applied to this job
+useEffect(() => {
+  const token = localStorage.getItem("token");
+  if (token && job.applications?.applied_users) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const hasApplied = job.applications.applied_users.some(
+        app => app.user_id === payload.id
+      );
+      
+      if (hasApplied) {
+        setApplicationStatus(prev => ({
+          ...prev,
+          [job._id]: { 
+            applied: true, 
+            message: "Already applied",
+            status: job.applications.applied_users.find(
+              app => app.user_id === payload.id
+            )?.status || 'applied'
+          }
+        }));
+      }
+    } catch (error) {
+      console.error("Error checking application status:", error);
+    }
+  }
+}, [job._id, job.applications?.applied_users]);
   // Get current user ID from token
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -264,10 +336,23 @@ function JobCard({ job }) {
             </button>
           </div>
           
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition flex items-center gap-2">
-            <Send size={16} />
-            Apply Now
-          </button>
+          <button
+  onClick={handleApply}
+  disabled={applying || applicationStatus[job._id]?.applied}
+  className={`px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2 ${
+    applicationStatus[job._id]?.applied
+      ? "bg-green-600 text-white cursor-not-allowed"
+      : applying
+      ? "bg-blue-400 text-white cursor-not-allowed"
+      : "bg-blue-600 text-white hover:bg-blue-700"
+  }`}
+>
+  <Send size={16} />
+  {applying ? "Applying..." : 
+   applicationStatus[job._id]?.applied ? 
+   `Applied (${applicationStatus[job._id]?.status})` : 
+   "Apply Now"}
+</button>
         </div>
 
         {/* Comments Section */}
@@ -458,4 +543,4 @@ export default function JobFeed() {
       </div>
     </DashboardLayout>
   );
-}
+} 
