@@ -16,9 +16,11 @@ export default function Courses() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileViewerOpen, setFileViewerOpen] = useState(false);
   const [enrollmentStatus, setEnrollmentStatus] = useState({});
+  const [fileLoading, setFileLoading] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState(null);
 
   const API_BASE = 'http://localhost:5000/api';
-
+    const API_BASE2 = 'http://localhost:5000';
   const getAuthToken = () => {
     return localStorage.getItem('token');
   };
@@ -173,33 +175,110 @@ export default function Courses() {
     }
   };
 
-  const handleFileClick = (file) => {
-    // Only allow file viewing for enrolled users
-    if (!enrollmentStatus[file.courseId]) {
-      alert('Please enroll in the course to access this content');
-      return;
+// Updated handleFileClick function with better PDF handling
+const handleFileClick = async (file) => {
+  // Only allow file viewing for enrolled users
+  if (!enrollmentStatus[file.courseId]) {
+    alert('Please enroll in the course to access this content');
+    return;
+  }
+  
+  setFileLoading(true);
+  setFileViewerOpen(true);
+  setPdfUrl(null);
+  
+  try {
+    const response = await fetch(`${API_BASE}/auth/contents/${file._id}/view`, {
+      headers: {
+        'Authorization': `Bearer ${getAuthToken()}`,
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+
+    // Check content type header first
+    const contentType = response.headers.get('content-type');
     
-    setSelectedFile(file);
-    setFileViewerOpen(true);
-  };
-
-  const downloadFile = (file) => {
-    // Create a temporary link to trigger download
-    const link = document.createElement('a');
-    link.href = file.url;
-    link.download = file.title;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const getFileIcon = (fileType) => {
+    if (contentType === 'application/pdf') {
+      // Handle direct PDF buffer response
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setPdfUrl(url);
+      setSelectedFile({
+        _id: file._id,
+        title: file.title,
+        type: 'document',
+        fileType: 'pdf',
+        isPdf: true,
+        url: url // Add URL here for consistency
+      });
+    } else {
+      // Handle JSON response
+      const data = await response.json();
+      
+      if (data.success) {
+        const fileData = data.data;
+        
+        // Prioritize file_url over url for all content types
+        if (fileData.file_url) {
+          fileData.url = fileData.file_url;
+        }
+        
+        // Convert relative URLs to absolute
+        if (fileData.url && fileData.url.startsWith('/')) {
+          fileData.url = `${API_BASE2}${fileData.url}`;
+        }
+        
+        // For PDF files from JSON response, create blob URL for iframe compatibility
+        if (fileData.url && (fileData.fileType === 'pdf' || fileData.url.endsWith('.pdf'))) {
+          try {
+            const pdfResponse = await fetch(fileData.url, {
+              headers: {
+                'Authorization': `Bearer ${getAuthToken()}`,
+              }
+            });
+            
+            if (pdfResponse.ok) {
+              const blob = await pdfResponse.blob();
+              const blobUrl = URL.createObjectURL(blob);
+              setPdfUrl(blobUrl);
+              fileData.blobUrl = blobUrl;
+            }
+          } catch (pdfErr) {
+            console.warn('Could not create blob URL for PDF:', pdfErr);
+          }
+        }
+        
+        setSelectedFile(fileData);
+      } else {
+        throw new Error(data.message || 'Failed to fetch file content');
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching file content:', err);
+    alert('Error loading file content: ' + err.message);
+    setFileViewerOpen(false);
+  } finally {
+    setFileLoading(false);
+  }
+};
+  const getFileIcon = (item) => {
+    // Use fileType if available, otherwise fall back to type
+    const fileType = item.fileType || item.type;
+    
     switch (fileType) {
       case 'pdf': return <FileText className="h-5 w-5 text-red-500" />;
-      case 'video': return <FileVideo className="h-5 w-5 text-blue-500" />;
+      case 'video': 
+      case 'mp4': 
+      case 'mov': return <FileVideo className="h-5 w-5 text-blue-500" />;
       case 'quiz': return <FileQuestion className="h-5 w-5 text-purple-500" />;
-      case 'code': return <FileCode className="h-5 w-5 text-green-500" />;
+      case 'code': 
+      case 'coding-question': return <FileCode className="h-5 w-5 text-green-500" />;
+      case 'text': 
+      case 'txt': 
+      case 'document': return <FileText className="h-5 w-5 text-gray-500" />;
       default: return <File className="h-5 w-5 text-gray-500" />;
     }
   };
@@ -215,6 +294,212 @@ export default function Courses() {
       default: return <Book className="h-5 w-5" />;
     }
   };
+
+const renderFileContent = () => {
+  if (!selectedFile) return null;
+  
+  if (fileLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader className="h-8 w-8 animate-spin text-blue-500" />
+        <span className="ml-2">Loading content...</span>
+      </div>
+    );
+  }
+  
+  // Handle PDF files specifically
+  if (selectedFile.fileType === 'pdf' || selectedFile.isPdf || 
+      (selectedFile.url && selectedFile.url.toLowerCase().includes('.pdf'))) {
+    
+    // Determine the best URL to use for the PDF
+    let pdfSource = pdfUrl || selectedFile.blobUrl || selectedFile.url;
+    
+    // Add viewer parameter to help with embedding
+    const viewerUrl = pdfSource.startsWith('blob:') ? pdfSource : `${pdfSource}#view=FitH`;
+    
+    return (
+      <div className="w-full">
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>PDF Document:</strong> {selectedFile.title}
+          </p>
+          <div className="flex gap-2 mt-2">
+            <a 
+              href={pdfSource} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 underline text-sm"
+            >
+              Open in new tab
+            </a>
+            <button
+              onClick={() => {
+                const link = document.createElement('a');
+                link.href = pdfSource;
+                link.download = selectedFile.title || 'document.pdf';
+                link.click();
+              }}
+              className="text-blue-600 hover:text-blue-800 underline text-sm"
+            >
+              Download PDF
+            </button>
+          </div>
+        </div>
+        
+        {/* Try multiple approaches for PDF display */}
+        <div className="w-full border rounded-lg overflow-hidden bg-gray-100">
+          {/* Primary iframe approach */}
+          <iframe 
+            src={viewerUrl} 
+            className="w-full h-96 border-0" 
+            title={selectedFile.title}
+            onError={(e) => {
+              console.log('Iframe failed to load PDF');
+              // Fallback will be handled by the object tag below
+            }}
+          />
+          
+          {/* Fallback object tag (hidden by default, can be shown if iframe fails) */}
+          <object 
+            data={viewerUrl} 
+            type="application/pdf" 
+            className="w-full h-96 hidden"
+            style={{ display: 'none' }}
+          >
+            <div className="p-8 text-center">
+              <p className="text-gray-600 mb-4">
+                PDF cannot be displayed in this browser.
+              </p>
+              <a 
+                href={pdfSource} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 inline-block"
+              >
+                Open PDF in new tab
+              </a>
+            </div>
+          </object>
+        </div>
+        
+        {/* Alternative: Embed with better error handling */}
+        <div className="mt-4 text-center text-sm text-gray-600">
+          If the PDF doesn't display above, try opening it in a new tab or downloading it.
+        </div>
+      </div>
+    );
+  }
+  
+  // Handle other file types with URLs (video, images, etc.)
+  if (selectedFile.url) {
+    const fileExtension = selectedFile.url.split('.').pop().toLowerCase();
+    
+    // Handle video files
+    if (['mp4', 'mov', 'avi', 'webm'].includes(fileExtension) || selectedFile.type === 'video') {
+      return (
+        <div className="w-full">
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Video:</strong> {selectedFile.title}
+            </p>
+          </div>
+          <video controls className="w-full max-h-96" autoPlay>
+            <source src={selectedFile.url} type={`video/${fileExtension}`} />
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      );
+    }
+    
+    // Handle image files
+    else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension)) {
+      return (
+        <div className="w-full">
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Image:</strong> {selectedFile.title}
+            </p>
+          </div>
+          <img 
+            src={selectedFile.url} 
+            alt={selectedFile.title}
+            className="w-full max-h-96 object-contain mx-auto"
+          />
+        </div>
+      );
+    }
+    
+    // Handle other file types with download option
+    else {
+      return (
+        <div className="text-center py-12">
+          <File className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">File Download</h3>
+          <p className="text-gray-600 mb-4">{selectedFile.title}</p>
+          <a 
+            href={selectedFile.url} 
+            download
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 inline-block"
+          >
+            Download File
+          </a>
+        </div>
+      );
+    }
+  }
+  
+  // Handle content types without URLs (text, quizzes, coding problems)
+  switch (selectedFile.type) {
+    case 'document':
+      return (
+        <div className="prose max-w-none p-4">
+          <h1 className="text-2xl font-bold mb-4">{selectedFile.title}</h1>
+          {selectedFile.content ? (
+            <div dangerouslySetInnerHTML={{ __html: selectedFile.content }} />
+          ) : (
+            <p className="text-gray-500">No content available</p>
+          )}
+        </div>
+      );
+    
+    case 'quiz':
+      return (
+        <div className="p-4">
+          <h2 className="text-xl font-bold mb-4">{selectedFile.title}</h2>
+          <div className="bg-gray-100 p-4 rounded-lg">
+            <p className="text-gray-600 mb-4">Quiz content would be displayed here</p>
+            {selectedFile.questions && (
+              <div>
+                <h3 className="font-semibold mb-2">Questions:</h3>
+                <div dangerouslySetInnerHTML={{ __html: selectedFile.questions }} />
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    
+    case 'coding-question':
+      return (
+        <div className="p-4">
+          <h2 className="text-xl font-bold mb-4">{selectedFile.title}</h2>
+          <div className="bg-gray-900 text-white p-4 rounded-lg font-mono">
+            <pre className="whitespace-pre-wrap">
+              {selectedFile.problem || 'Coding problem content would be displayed here'}
+            </pre>
+          </div>
+        </div>
+      );
+    
+    default:
+      return (
+        <div className="text-center py-12">
+          <File className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600 mb-4">This content type cannot be previewed</p>
+          <p className="text-sm text-gray-500">Content type: {selectedFile.type}</p>
+        </div>
+      );
+  }
+};
 
   const renderCourseContents = (contents, courseId, level = 0) => {
     if (!contents || contents.length === 0) {
@@ -257,23 +542,13 @@ export default function Courses() {
             className={`flex items-center py-2 px-4 hover:bg-gray-100 rounded ${level > 0 ? 'pl-8' : ''} ${enrollmentStatus[courseId] ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
             onClick={() => enrollmentStatus[courseId] && handleFileClick({...item, courseId})}
           >
-            {getFileIcon(item.fileType)}
+            {getFileIcon(item)}
             <span className="ml-2 flex-1">{item.title}</span>
             {enrollmentStatus[courseId] ? (
-              <div className="flex space-x-2">
-                <Eye 
-                  className="h-4 w-4 text-blue-500 hover:text-blue-700" 
-                  title="View file"
-                />
-                <Download 
-                  className="h-4 w-4 text-gray-500 hover:text-gray-700" 
-                  title="Download file"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    downloadFile({...item, courseId});
-                  }}
-                />
-              </div>
+              <Eye 
+                className="h-4 w-4 text-blue-500 hover:text-blue-700" 
+                title="View content"
+              />
             ) : (
               <AlertCircle className="h-4 w-4 text-gray-400" title="Enroll to access" />
             )}
@@ -282,6 +557,15 @@ export default function Courses() {
       }
     });
   };
+
+  // Clean up PDF URL when component unmounts or modal closes
+  useEffect(() => {
+    return () => {
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+    };
+  }, [pdfUrl]);
 
   useEffect(() => {
     fetchCourses();
@@ -386,13 +670,22 @@ export default function Courses() {
         )}
 
         {/* File Viewer Modal */}
-        {fileViewerOpen && selectedFile && (
+        {fileViewerOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg w-full max-w-4xl max-h-screen overflow-auto">
               <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white">
-                <h3 className="text-lg font-semibold">{selectedFile.title}</h3>
+                <h3 className="text-lg font-semibold">
+                  {selectedFile?.title || 'Loading...'}
+                </h3>
                 <button 
-                  onClick={() => setFileViewerOpen(false)}
+                  onClick={() => {
+                    setFileViewerOpen(false);
+                    setSelectedFile(null);
+                    if (pdfUrl) {
+                      URL.revokeObjectURL(pdfUrl);
+                      setPdfUrl(null);
+                    }
+                  }}
                   className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100"
                 >
                   <X className="h-6 w-6" />
@@ -400,31 +693,7 @@ export default function Courses() {
               </div>
               
               <div className="p-6">
-                {selectedFile.fileType === 'pdf' ? (
-                  <iframe 
-                    src={selectedFile.url} 
-                    className="w-full h-96" 
-                    title={selectedFile.title}
-                    frameBorder="0"
-                  />
-                ) : selectedFile.fileType === 'video' ? (
-                  <video controls className="w-full max-h-96">
-                    <source src={selectedFile.url} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
-                ) : (
-                  <div className="text-center py-12">
-                    <File className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-4">Preview not available for this file type</p>
-                    <button
-                      onClick={() => downloadFile(selectedFile)}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center mx-auto"
-                    >
-                      <Download className="h-5 w-5 mr-2" />
-                      Download File
-                    </button>
-                  </div>
-                )}
+                {renderFileContent()}
               </div>
             </div>
           </div>

@@ -4,7 +4,9 @@ import { getMySQLPool } from "../config/db.js";
 import { authenticateToken } from "../middleware/auth.js";
 import Content from "../models/Content.js";
 import Enrollment from "../models/Enrollment.js";
-import User from "../models/User.js"; // Import User model
+import User from "../models/User.js";
+import path from "path";
+import fs from "fs";
 
 const router = express.Router();
 
@@ -18,12 +20,10 @@ const requireStudent = (req, res, next) => {
 
 // Helper function to convert numeric ID to ObjectId if needed
 const getUserId = async (numericId) => {
-  // If it's already an ObjectId, return it
   if (mongoose.Types.ObjectId.isValid(numericId) && typeof numericId !== 'number') {
     return numericId;
   }
   
-  // Find the user by numeric ID and get their ObjectId
   const user = await User.findOne({ id: numericId });
   return user ? user._id : null;
 };
@@ -31,13 +31,12 @@ const getUserId = async (numericId) => {
 // Get all published courses for students
 router.get('/courses', authenticateToken, requireStudent, async (req, res) => {
   try {
-    // Fetch only published parent courses (those without parent_id)
     const courses = await Content.find({
       status: 'published',
-      parent_id: null // Only get parent courses
+      parent_id: null
     })
-    .populate('created_by', 'name email') // Populate instructor info
-    .select('-content_data') // Exclude content data for listing
+    .populate('created_by', 'name email')
+    .select('-content_data')
     .sort({ createdAt: -1 });
 
     res.json({
@@ -67,7 +66,6 @@ router.get('/courses/:id/contents', authenticateToken, requireStudent, async (re
       });
     }
     
-    // Check if user is enrolled in the course
     const enrollment = await Enrollment.findOne({
       user_id: userId,
       course_id: courseId,
@@ -81,12 +79,11 @@ router.get('/courses/:id/contents', authenticateToken, requireStudent, async (re
       });
     }
     
-    // Fetch all contents for this course (direct children only)
     const contents = await Content.find({
       parent_id: courseId,
       status: 'published'
     })
-    .select('-content_data') // Exclude content data for listing
+    .select('-content_data')
     .sort({ order: 1, createdAt: 1 });
     
     res.json({
@@ -116,7 +113,6 @@ router.get('/courses/:courseId/contents/:folderId', authenticateToken, requireSt
       });
     }
     
-    // Check if user is enrolled in the course
     const enrollment = await Enrollment.findOne({
       user_id: userId,
       course_id: courseId,
@@ -130,7 +126,6 @@ router.get('/courses/:courseId/contents/:folderId', authenticateToken, requireSt
       });
     }
     
-    // Verify the folder belongs to the course
     const folder = await Content.findOne({
       _id: folderId,
       parent_id: courseId,
@@ -145,12 +140,11 @@ router.get('/courses/:courseId/contents/:folderId', authenticateToken, requireSt
       });
     }
     
-    // Fetch all contents for this folder
     const contents = await Content.find({
       parent_id: folderId,
       status: 'published'
     })
-    .select('-content_data') // Exclude content data for listing
+    .select('-content_data')
     .sort({ order: 1, createdAt: 1 });
     
     res.json({
@@ -212,11 +206,10 @@ router.post('/courses/:id/enroll', authenticateToken, requireStudent, async (req
       });
     }
     
-    // Check if course exists and is published
     const course = await Content.findOne({
       _id: courseId,
       status: 'published',
-      parent_id: null // Ensure it's a parent course
+      parent_id: null
     });
     
     if (!course) {
@@ -226,7 +219,6 @@ router.post('/courses/:id/enroll', authenticateToken, requireStudent, async (req
       });
     }
     
-    // Check if already enrolled
     const existingEnrollment = await Enrollment.findOne({
       user_id: userId,
       course_id: courseId
@@ -239,7 +231,6 @@ router.post('/courses/:id/enroll', authenticateToken, requireStudent, async (req
           message: 'Already enrolled in this course'
         });
       } else {
-        // Update existing enrollment
         existingEnrollment.status = 'enrolled';
         existingEnrollment.enrolled_at = new Date();
         await existingEnrollment.save();
@@ -251,7 +242,6 @@ router.post('/courses/:id/enroll', authenticateToken, requireStudent, async (req
       }
     }
     
-    // Create new enrollment
     const enrollment = new Enrollment({
       user_id: userId,
       course_id: courseId,
@@ -275,8 +265,7 @@ router.post('/courses/:id/enroll', authenticateToken, requireStudent, async (req
   }
 });
 
-// Get file content for viewing
-// Get file content for viewing - Update this route in your backend
+// Get file content for viewing - UPDATED to handle file_url properly
 router.get('/contents/:id/view', authenticateToken, requireStudent, async (req, res) => {
   try {
     const contentId = req.params.id;
@@ -289,7 +278,6 @@ router.get('/contents/:id/view', authenticateToken, requireStudent, async (req, 
       });
     }
     
-    // Get the content with all data (including content_data)
     const content = await Content.findById(contentId);
     
     if (!content || content.status !== 'published') {
@@ -299,7 +287,7 @@ router.get('/contents/:id/view', authenticateToken, requireStudent, async (req, 
       });
     }
     
-    // Find the course this content belongs to by traversing up the parent hierarchy
+    // Find the course this content belongs to
     let currentContent = content;
     let courseId = null;
     
@@ -307,7 +295,6 @@ router.get('/contents/:id/view', authenticateToken, requireStudent, async (req, 
       currentContent = await Content.findById(currentContent.parent_id);
       if (!currentContent) break;
       
-      // If we reach a content with no parent, it's the course
       if (!currentContent.parent_id) {
         courseId = currentContent._id;
         break;
@@ -321,7 +308,6 @@ router.get('/contents/:id/view', authenticateToken, requireStudent, async (req, 
       });
     }
     
-    // Check if user is enrolled in the course
     const enrollment = await Enrollment.findOne({
       user_id: userId,
       course_id: courseId,
@@ -335,34 +321,37 @@ router.get('/contents/:id/view', authenticateToken, requireStudent, async (req, 
       });
     }
     
-    // Return the content with appropriate data based on type
+    // ALWAYS return file_url if available, regardless of content type
     let responseData = {
       _id: content._id,
       title: content.title,
       type: content.type,
       fileType: content.fileType,
-      description: content.description
+      description: content.description,
+      file_url: content.file_url // Always include file_url
     };
     
-    // Handle different content types
+    // For PDF files, serve directly if no file_url but has content_data
     if (content.type === 'document' && content.fileType === 'pdf') {
-      responseData.url = content.fileUrl || content.content_data;
-    } 
-    else if (content.type === 'video') {
-      responseData.url = content.fileUrl || content.content_data;
+      if (content.content_data && content.content_data instanceof Buffer) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${content.title}.pdf"`);
+        return res.send(content.content_data);
+      }
     }
-    else if (content.type === 'document') {
-      // For text-based documents, return the content directly
+    
+    // For other content types that might have file_url
+    if (content.file_url) {
+      responseData.url = content.file_url;
+    } else if (content.type === 'video') {
+      responseData.url = content.content_data;
+    } else if (content.type === 'document') {
       responseData.content = content.content_data;
-    }
-    else if (content.type === 'quiz') {
-      responseData.questions = content.content_data; // Assuming content_data contains quiz questions
-    }
-    else if (content.type === 'coding-question') {
-      responseData.problem = content.content_data; // Assuming content_data contains coding problem
-    }
-    else {
-      // For other types, return whatever data is available
+    } else if (content.type === 'quiz') {
+      responseData.questions = content.content_data;
+    } else if (content.type === 'coding-question') {
+      responseData.problem = content.content_data;
+    } else {
       responseData.content = content.content_data;
     }
     
@@ -378,6 +367,40 @@ router.get('/contents/:id/view', authenticateToken, requireStudent, async (req, 
       error: error.message
     });
   }
+});
+
+// Serve static files from uploads directory
+router.get('/uploads/content/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(process.cwd(), 'uploads', 'content', filename);
+  
+  // Check if file exists
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({
+      success: false,
+      message: 'File not found'
+    });
+  }
+  
+  // Set appropriate headers based on file type
+  const ext = path.extname(filename).toLowerCase();
+  const contentTypes = {
+    '.pdf': 'application/pdf',
+    '.mp4': 'video/mp4',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.txt': 'text/plain',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  };
+  
+  res.setHeader('Content-Type', contentTypes[ext] || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  
+  // Stream the file
+  const fileStream = fs.createReadStream(filePath);
+  fileStream.pipe(res);
 });
 
 export default router;
