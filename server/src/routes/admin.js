@@ -3,6 +3,25 @@ import { getMySQLPool } from "../config/db.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { excelDateToSQL } from "../utils/helpers.js";
 import { upload } from "../utils/upload.js"
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import Content from '../models/Content.js';   // Mongoose model
+import { v4 as uuidv4 } from 'uuid';
+
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(process.cwd(), 'uploads/content');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, uuidv4() + ext);
+  }
+});
+const uploadContent = multer({ storage });
 
 const router = express.Router();
 
@@ -728,5 +747,91 @@ router.post("/admin/students/bulk-register", authenticateToken, upload.none(), a
     connection.release();
   }
 });
+
+// ================== UPLOAD FILE ==================
+router.post('/content/upload', authenticateToken, uploadContent.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
+    const fileUrl = `/uploads/content/${req.file.filename}`;
+    res.json({ success: true, fileUrl });
+  } catch (err) {
+    console.error('Upload error:', err);
+    res.status(500).json({ success: false, message: 'Upload failed', error: err.message });
+  }
+});
+
+// ================== GET CONTENT (TREE OR LIST) ==================
+router.get('/content/tree', authenticateToken, async (req, res) => {
+  try {
+    const { search, type } = req.query;
+    const match = {};
+    if (search) match.title = { $regex: search, $options: 'i' };
+    if (type && type !== 'all') match.type = type;
+    const tree = await buildTree(null, match);
+    res.json({ success: true, data: tree });
+  } catch (err) {
+    console.error('Tree fetch error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get('/content/list', authenticateToken, async (req, res) => {
+  try {
+    const { search, type } = req.query;
+    const filter = {};
+    if (search) filter.title = { $regex: search, $options: 'i' };
+    if (type && type !== 'all') filter.type = type;
+    const items = await Content.find(filter).populate('parent_id', 'title').sort({ createdAt: -1 });
+    res.json({ success: true, data: items });
+  } catch (err) {
+    console.error('List fetch error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ================== CREATE CONTENT ==================
+router.post('/content', authenticateToken, async (req, res) => {
+  try {
+    const doc = new Content({ ...req.body, created_by: req.user.id });
+    await doc.save();
+    res.json({ success: true, data: doc });
+  } catch (err) {
+    console.error('Create error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ================== UPDATE CONTENT ==================
+router.put('/content/:id', authenticateToken, async (req, res) => {
+  try {
+    const updated = await Content.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('Update error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ================== DELETE CONTENT ==================
+router.delete('/content/:id', authenticateToken, async (req, res) => {
+  try {
+    await Content.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Deleted' });
+  } catch (err) {
+    console.error('Delete error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Helper: Recursively build tree
+async function buildTree(parentId, match) {
+  const children = await Content.find({ parent_id: parentId, ...match }).sort({ order: 1 });
+  return Promise.all(
+    children.map(async (child) => ({
+      ...child.toObject(),
+      children: child.type === 'folder' ? await buildTree(child._id, match) : []
+    }))
+  );
+}
 
 export default router;

@@ -40,6 +40,33 @@ export const getContentTree = async (req, res) => {
   }
 };
 
+// controllers/contentController.js
+export const uploadContentFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No file provided' 
+      });
+    }
+    
+    const fileUrl = `/uploads/content/${req.file.filename}`;
+    
+    res.json({ 
+      success: true, 
+      fileUrl,
+      message: 'File uploaded successfully'
+    });
+  } catch (err) {
+    console.error('Upload error:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Upload failed', 
+      error: err.message 
+    });
+  }
+};
+
 // Get flat content list (for table view)
 export const getContentList = async (req, res) => {
   try {

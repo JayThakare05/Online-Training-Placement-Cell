@@ -5,14 +5,19 @@ import {
   createContent, 
   updateContent, 
   deleteContent, 
-  getContentById 
+  getContentById,
+  uploadContentFile  // Add this import
 } from '../controllers/contentController.js';
 import { authenticateToken, adminOnly } from '../middleware/auth.js';
+import upload from '../middleware/upload.js'; // Make sure you have this
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(authenticateToken);
+
+// Add the upload route
+router.post('/upload', upload.single('file'), uploadContentFile);
 
 // Get content in tree format (hierarchical)
 router.get('/tree', getContentTree);

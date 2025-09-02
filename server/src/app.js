@@ -10,7 +10,11 @@ import jobRoutes from "./routes/jobs.js";
 import contentRoutes from "./routes/contentRoutes.js";
 import reportsRoutes from './routes/reports.js';
 import './models/Content.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const app = express();
