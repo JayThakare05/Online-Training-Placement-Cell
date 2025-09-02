@@ -12,11 +12,14 @@ export default function PostJob() {
   });
   
   const [recruiterInfo, setRecruiterInfo] = useState(null);
+  const [verificationStatus, setVerificationStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
 
-  // Fetch recruiter info on component mount
+  // Fetch recruiter info and verification status on component mount
   useEffect(() => {
-    fetchRecruiterInfo();
+    Promise.all([fetchRecruiterInfo(), fetchVerificationStatus()])
+      .finally(() => setPageLoading(false));
   }, []);
 
   const fetchRecruiterInfo = async () => {
@@ -37,12 +40,37 @@ export default function PostJob() {
     }
   };
 
+  const fetchVerificationStatus = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/auth/recruiter/verification-status', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setVerificationStatus(data);
+      }
+    } catch (error) {
+      console.error('Error fetching verification status:', error);
+    }
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Double check verification status before allowing submission
+    if (verificationStatus?.status !== "approved") {
+      alert('Your account must be verified before posting jobs');
+      return;
+    }
+
     
     if (!recruiterInfo) {
       alert('Please complete your profile first');
@@ -100,20 +128,73 @@ export default function PostJob() {
     }
   };
 
+  // Show loading while fetching initial data
+  if (pageLoading) {
+    return (
+      <DashboardLayout role="recruiter">
+        <div className="max-w-3xl mx-auto p-6 bg-white rounded-xl shadow">
+          <div className="flex justify-center items-center py-12">
+            <div className="text-lg">Loading...</div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Show verification status message if not verified
+  const renderVerificationStatus = () => {
+    if (!verificationStatus) return null;
+
+    const statusStyles = {
+      pending: "bg-yellow-50 border-yellow-200 text-yellow-800",
+      rejected: "bg-red-50 border-red-200 text-red-800",
+      approved: "bg-green-50 border-green-200 text-green-800"
+    };
+
+    const statusIcons = {
+      pending: "⏳",
+      rejected: "❌",
+      approved: "✅"
+    };
+
+    return (
+      <div className={`mb-6 p-4 border rounded-lg ${statusStyles[verificationStatus.status]}`}>
+        <div className="flex items-center gap-2">
+          <span>{statusIcons[verificationStatus.status]}</span>
+          <div>
+            <h3 className="font-semibold">Account Verification Status: {verificationStatus.status.charAt(0).toUpperCase() + verificationStatus.status.slice(1)}</h3>
+            <p className="text-sm mt-1">{verificationStatus.message}</p>
+            {verificationStatus.company_name && (
+              <p className="text-sm mt-1">Company: {verificationStatus.company_name}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+const isFormDisabled = verificationStatus?.status !== "approved";
+
   return (
     <DashboardLayout role="recruiter">
       <div className="max-w-3xl mx-auto p-6 bg-white rounded-xl shadow">
         <h1 className="text-2xl font-bold text-primary mb-6">Post a New Job</h1>
 
-        {recruiterInfo && (
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-            <h3 className="font-semibold text-gray-700">Posting as:</h3>
-            <p className="text-sm text-gray-600">
-              {recruiterInfo.recruiter_name || recruiterInfo.name} - {recruiterInfo.company_name}
-            </p>
-          </div>
-        )}
+        {/* Verification Status */}
+        {renderVerificationStatus()}
 
+        {/* Recruiter Info */}
+        {recruiterInfo && verificationStatus?.status === "approved" && (
+  <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+    <h3 className="font-semibold text-gray-700">Posting as:</h3>
+    <p className="text-sm text-gray-600">
+      {recruiterInfo.recruiter_name || recruiterInfo.name} - {recruiterInfo.company_name}
+    </p>
+  </div>
+)}
+
+
+        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Job Title */}
           <div>
@@ -124,8 +205,9 @@ export default function PostJob() {
               value={formData.title}
               onChange={handleChange}
               placeholder="e.g. Software Engineer"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary"
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
               required
+              disabled={isFormDisabled}
             />
           </div>
 
@@ -138,8 +220,9 @@ export default function PostJob() {
               value={formData.description}
               onChange={handleChange}
               placeholder="Describe the role, responsibilities, and requirements..."
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary"
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
               required
+              disabled={isFormDisabled}
             />
           </div>
 
@@ -152,8 +235,9 @@ export default function PostJob() {
               value={formData.location}
               onChange={handleChange}
               placeholder="e.g. Pune, India / Remote"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary"
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
               required
+              disabled={isFormDisabled}
             />
           </div>
 
@@ -166,8 +250,9 @@ export default function PostJob() {
               value={formData.salary}
               onChange={handleChange}
               placeholder="e.g. ₹8-12 LPA"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary"
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
               required
+              disabled={isFormDisabled}
             />
           </div>
 
@@ -180,8 +265,9 @@ export default function PostJob() {
               value={formData.skills}
               onChange={handleChange}
               placeholder="e.g. React, Node.js, MongoDB, Python"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary"
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
               required
+              disabled={isFormDisabled}
             />
           </div>
 
@@ -192,7 +278,8 @@ export default function PostJob() {
               name="type"
               value={formData.type}
               onChange={handleChange}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary"
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring focus:ring-primary ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+              disabled={isFormDisabled}
             >
               <option>Full-time</option>
               <option>Part-time</option>
@@ -204,12 +291,31 @@ export default function PostJob() {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading || !recruiterInfo}
-            className="w-full bg-primary text-white py-3 rounded-lg hover:bg-orange-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isFormDisabled}
+            className={`w-full py-3 rounded-lg transition ${
+              isFormDisabled 
+                ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                : 'bg-primary text-white hover:bg-orange-600'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            {loading ? 'Posting Job...' : 'Post Job'}
+            {loading ? 'Posting Job...' : 
+             isFormDisabled ? 'Account Verification Required' : 
+             'Post Job'}
           </button>
         </form>
+
+        {/* Help text for unverified users */}
+        {verificationStatus?.status !== "approved" && (
+  <div className="mt-4 text-center text-sm text-gray-600">
+    {verificationStatus?.status === 'pending' && (
+      <p>Your account is under review. You'll be able to post jobs once verified.</p>
+    )}
+    {verificationStatus?.status === 'rejected' && (
+      <p>Please contact support to resolve your account verification issues.</p>
+    )}
+  </div>
+)}
+
       </div>
     </DashboardLayout>
   );

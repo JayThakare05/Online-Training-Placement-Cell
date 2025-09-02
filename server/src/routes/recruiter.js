@@ -248,37 +248,71 @@ router.get("/recruiter/dashboard-stats", authenticateToken, async (req, res) => 
 // ================== CHECK VERIFICATION STATUS ==================
 router.get("/recruiter/verification-status", authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== 'recruiter') {
-      return res.status(403).json({ message: 'Unauthorized. Recruiter access required.' });
-    }
-
     const pool = getMySQLPool();
     const userId = req.user.id;
+    const role = req.user.role;
 
-    const [result] = await pool.query(
-      "SELECT isVerified, company_name FROM recruiters WHERE user_id = ?",
-      [userId]
-    );
-
-    if (result.length === 0) {
-      return res.status(404).json({ message: 'Recruiter profile not found' });
+    if (role !== 'recruiter') {
+      return res.status(403).json({ message: "Access denied. Recruiters only." });
     }
 
-    const { isVerified, company_name } = result[0];
+    const [rows] = await pool.query(`
+      SELECT 
+        u.id,
+        u.name,
+        u.email,
+        r.company_name,
+        r.isVerified
+      FROM users u
+      LEFT JOIN recruiters r ON u.id = r.user_id
+      WHERE u.id = ?
+    `, [userId]);
 
-    res.json({
-      isVerified: isVerified === 1,
-      status: isVerified === 1 ? 'approved' : (isVerified === -1 ? 'rejected' : 'pending'),
-      message: isVerified === 1 
-        ? 'Your account has been verified and approved.' 
-        : isVerified === -1 
-          ? 'Your account verification has been rejected. Please contact support.'
-          : 'Your account is pending verification.',
-      company_name
-    });
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Recruiter profile not found" });
+    }
+
+    const profile = rows[0];
+
+    // 🔹 Debug log
+    console.log("Raw database isVerified value:", profile.isVerified, typeof profile.isVerified);
+
+    // Ensure boolean conversion - this is key!
+    const isVerifiedBoolean = profile.isVerified === 1;
+    
+    console.log("Converted isVerified boolean:", isVerifiedBoolean);
+
+    const status =
+      profile.isVerified === 1
+        ? "approved"
+        : profile.isVerified === -1
+          ? "rejected"
+          : "pending";
+
+    const message =
+      profile.isVerified === 1
+        ? "Your account has been verified and approved."
+        : profile.isVerified === -1
+          ? "Your account verification has been rejected. Please contact support."
+          : "Your account is pending verification.";
+
+    const responseData = {
+      id: profile.id,
+      name: profile.name || "",
+      email: profile.email || "",
+      company_name: profile.company_name || "",
+      isVerified: isVerifiedBoolean, // Explicitly set as boolean
+      status,
+      message
+    };
+
+    console.log("Sending response:", responseData);
+
+    res.json(responseData);
   } catch (error) {
-    console.error('Error checking verification status:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error checking verification status:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
+
 export default router;
