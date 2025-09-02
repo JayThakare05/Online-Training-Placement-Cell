@@ -190,6 +190,14 @@ function App() {
             } 
           />
           <Route 
+            path="/student/applications" 
+            element={
+              <ProtectedRoute allowedRole="student">
+                <JobApplications/>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/student/courses" 
             element={
               <ProtectedRoute allowedRole="student">
