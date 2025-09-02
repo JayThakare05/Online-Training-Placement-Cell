@@ -4,7 +4,7 @@ import {
   Book, Users, Clock, Tag, Play, HelpCircle, Code, 
   Folder, FileText, ChevronRight, ChevronDown, Download,
   Eye, File, FileVideo, FileQuestion, FileCode, X,
-  CheckCircle, AlertCircle, Loader
+  CheckCircle, AlertCircle, Loader, Maximize2, Minimize2
 } from "lucide-react";
 
 export default function Courses() {
@@ -18,9 +18,11 @@ export default function Courses() {
   const [enrollmentStatus, setEnrollmentStatus] = useState({});
   const [fileLoading, setFileLoading] = useState(false);
   const [pdfUrl, setPdfUrl] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const API_BASE = 'http://localhost:5000/api';
-    const API_BASE2 = 'http://localhost:5000';
+  const API_BASE2 = 'http://localhost:5000';
+  
   const getAuthToken = () => {
     return localStorage.getItem('token');
   };
@@ -41,11 +43,9 @@ export default function Courses() {
       const data = await response.json();
       
       if (data.success) {
-        // Filter to only show parent courses (those without a parent_id)
         const parentCourses = data.data.filter(course => !course.parent_id);
         setCourses(parentCourses);
         
-        // Check enrollment status for each course
         const statuses = {};
         for (const course of parentCourses) {
           statuses[course._id] = await checkEnrollmentStatus(course._id);
@@ -124,13 +124,10 @@ export default function Courses() {
       const data = await response.json();
       
       if (data.success) {
-        // Update enrollment status
         setEnrollmentStatus(prev => ({
           ...prev,
           [courseId]: true
         }));
-        
-        // Show success notification
         alert('Enrollment successful!');
       } else {
         alert(`Enrollment failed: ${data.message}`);
@@ -142,13 +139,11 @@ export default function Courses() {
   };
 
   const toggleFolder = async (courseId, folderId) => {
-    // Toggle folder expansion state
     setExpandedFolders(prev => ({
       ...prev,
       [folderId]: !prev[folderId]
     }));
 
-    // If folder contents haven't been loaded yet, fetch them
     if (!courseContents[folderId]) {
       try {
         const response = await fetch(`${API_BASE}/auth/courses/${courseId}/contents/${folderId}`, {
@@ -175,9 +170,7 @@ export default function Courses() {
     }
   };
 
-// Updated handleFileClick function with better PDF handling
 const handleFileClick = async (file) => {
-  // Only allow file viewing for enrolled users
   if (!enrollmentStatus[file.courseId]) {
     alert('Please enroll in the course to access this content');
     return;
@@ -186,6 +179,7 @@ const handleFileClick = async (file) => {
   setFileLoading(true);
   setFileViewerOpen(true);
   setPdfUrl(null);
+  setIsFullscreen(false);
   
   try {
     const response = await fetch(`${API_BASE}/auth/contents/${file._id}/view`, {
@@ -198,11 +192,9 @@ const handleFileClick = async (file) => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    // Check content type header first
     const contentType = response.headers.get('content-type');
     
     if (contentType === 'application/pdf') {
-      // Handle direct PDF buffer response
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
@@ -212,26 +204,22 @@ const handleFileClick = async (file) => {
         type: 'document',
         fileType: 'pdf',
         isPdf: true,
-        url: url // Add URL here for consistency
+        url: url
       });
     } else {
-      // Handle JSON response
       const data = await response.json();
       
       if (data.success) {
         const fileData = data.data;
         
-        // Prioritize file_url over url for all content types
         if (fileData.file_url) {
           fileData.url = fileData.file_url;
         }
         
-        // Convert relative URLs to absolute
         if (fileData.url && fileData.url.startsWith('/')) {
           fileData.url = `${API_BASE2}${fileData.url}`;
         }
         
-        // For PDF files from JSON response, create blob URL for iframe compatibility
         if (fileData.url && (fileData.fileType === 'pdf' || fileData.url.endsWith('.pdf'))) {
           try {
             const pdfResponse = await fetch(fileData.url, {
@@ -264,8 +252,8 @@ const handleFileClick = async (file) => {
     setFileLoading(false);
   }
 };
+
   const getFileIcon = (item) => {
-    // Use fileType if available, otherwise fall back to type
     const fileType = item.fileType || item.type;
     
     switch (fileType) {
@@ -307,103 +295,74 @@ const renderFileContent = () => {
     );
   }
   
-  // Handle PDF files specifically
   if (selectedFile.fileType === 'pdf' || selectedFile.isPdf || 
       (selectedFile.url && selectedFile.url.toLowerCase().includes('.pdf'))) {
     
-    // Determine the best URL to use for the PDF
     let pdfSource = pdfUrl || selectedFile.blobUrl || selectedFile.url;
-    
-    // Add viewer parameter to help with embedding
-    const viewerUrl = pdfSource.startsWith('blob:') ? pdfSource : `${pdfSource}#view=FitH`;
+    const viewerUrl = pdfSource.startsWith('blob:') ? pdfSource : `${pdfSource}#view=FitH&toolbar=0&navpanes=0`;
     
     return (
       <div className="w-full">
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <strong>PDF Document:</strong> {selectedFile.title}
-          </p>
-          <div className="flex gap-2 mt-2">
-            <a 
-              href={pdfSource} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 underline text-sm"
-            >
-              Open in new tab
-            </a>
-            <button
-              onClick={() => {
-                const link = document.createElement('a');
-                link.href = pdfSource;
-                link.download = selectedFile.title || 'document.pdf';
-                link.click();
-              }}
-              className="text-blue-600 hover:text-blue-800 underline text-sm"
-            >
-              Download PDF
-            </button>
+<div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center">
+  <div>
+    <p className="text-sm text-blue-800 font-medium">
+      {selectedFile.title}
+    </p>
+    <p className="text-xs text-blue-600">PDF Document</p>
+  </div>
+  <div className="flex gap-3 items-center">
+    <button
+      onClick={() => setIsFullscreen(true)}
+      className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-100 transition-colors"
+      title="Enter fullscreen"
+    >
+      <Maximize2 size={18} />
+    </button>
+  </div>
+</div>
+        
+        <div className={`w-full border-2 border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm ${isFullscreen ? 'fixed inset-0 z-50 m-0' : 'h-[70vh]'}`}>
+  {/* Add this exit fullscreen button */}
+  {isFullscreen && (
+    <div className="absolute top-4 right-4 z-10">
+      <button
+        onClick={() => setIsFullscreen(false)}
+        className="bg-white text-gray-700 hover:text-gray-900 p-2 rounded-full shadow-md hover:bg-gray-100 transition-colors"
+        title="Exit fullscreen"
+      >
+        <Minimize2 size={20} />
+      </button>
+    </div>
+  )}
+  <iframe 
+    src={viewerUrl} 
+    className={`w-full ${isFullscreen ? 'h-full' : 'h-full'}`}
+    title={selectedFile.title}
+    frameBorder="0"
+  />
+</div>
+        
+        {!isFullscreen && (
+          <div className="mt-4 text-center text-sm text-gray-500">
+            Use the fullscreen button for better reading experience
           </div>
-        </div>
-        
-        {/* Try multiple approaches for PDF display */}
-        <div className="w-full border rounded-lg overflow-hidden bg-gray-100">
-          {/* Primary iframe approach */}
-          <iframe 
-            src={viewerUrl} 
-            className="w-full h-96 border-0" 
-            title={selectedFile.title}
-            onError={(e) => {
-              console.log('Iframe failed to load PDF');
-              // Fallback will be handled by the object tag below
-            }}
-          />
-          
-          {/* Fallback object tag (hidden by default, can be shown if iframe fails) */}
-          <object 
-            data={viewerUrl} 
-            type="application/pdf" 
-            className="w-full h-96 hidden"
-            style={{ display: 'none' }}
-          >
-            <div className="p-8 text-center">
-              <p className="text-gray-600 mb-4">
-                PDF cannot be displayed in this browser.
-              </p>
-              <a 
-                href={pdfSource} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 inline-block"
-              >
-                Open PDF in new tab
-              </a>
-            </div>
-          </object>
-        </div>
-        
-        {/* Alternative: Embed with better error handling */}
-        <div className="mt-4 text-center text-sm text-gray-600">
-          If the PDF doesn't display above, try opening it in a new tab or downloading it.
-        </div>
+        )}
       </div>
     );
   }
   
-  // Handle other file types with URLs (video, images, etc.)
   if (selectedFile.url) {
     const fileExtension = selectedFile.url.split('.').pop().toLowerCase();
     
-    // Handle video files
     if (['mp4', 'mov', 'avi', 'webm'].includes(fileExtension) || selectedFile.type === 'video') {
       return (
         <div className="w-full">
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800">
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800 font-medium">
               <strong>Video:</strong> {selectedFile.title}
             </p>
           </div>
-          <video controls className="w-full max-h-96" autoPlay>
+          <video controls className="w-full max-h-96 rounded-lg shadow-sm" autoPlay>
             <source src={selectedFile.url} type={`video/${fileExtension}`} />
             Your browser does not support the video tag.
           </video>
@@ -411,25 +370,23 @@ const renderFileContent = () => {
       );
     }
     
-    // Handle image files
     else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension)) {
       return (
         <div className="w-full">
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800">
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800 font-medium">
               <strong>Image:</strong> {selectedFile.title}
             </p>
           </div>
           <img 
             src={selectedFile.url} 
             alt={selectedFile.title}
-            className="w-full max-h-96 object-contain mx-auto"
+            className="w-full max-h-96 object-contain mx-auto rounded-lg shadow-sm"
           />
         </div>
       );
     }
     
-    // Handle other file types with download option
     else {
       return (
         <div className="text-center py-12">
@@ -439,8 +396,9 @@ const renderFileContent = () => {
           <a 
             href={selectedFile.url} 
             download
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 inline-block"
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 inline-flex items-center gap-2"
           >
+            <Download size={18} />
             Download File
           </a>
         </div>
@@ -448,30 +406,29 @@ const renderFileContent = () => {
     }
   }
   
-  // Handle content types without URLs (text, quizzes, coding problems)
   switch (selectedFile.type) {
     case 'document':
       return (
-        <div className="prose max-w-none p-4">
-          <h1 className="text-2xl font-bold mb-4">{selectedFile.title}</h1>
+        <div className="prose max-w-none p-6 bg-white rounded-lg shadow-sm">
+          <h1 className="text-3xl font-bold mb-6 text-gray-800">{selectedFile.title}</h1>
           {selectedFile.content ? (
-            <div dangerouslySetInnerHTML={{ __html: selectedFile.content }} />
+            <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: selectedFile.content }} />
           ) : (
-            <p className="text-gray-500">No content available</p>
+            <p className="text-gray-500 text-center py-12">No content available</p>
           )}
         </div>
       );
     
     case 'quiz':
       return (
-        <div className="p-4">
-          <h2 className="text-xl font-bold mb-4">{selectedFile.title}</h2>
-          <div className="bg-gray-100 p-4 rounded-lg">
-            <p className="text-gray-600 mb-4">Quiz content would be displayed here</p>
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-6 text-gray-800">{selectedFile.title}</h2>
+          <div className="bg-gray-50 p-6 rounded-lg border">
+            <p className="text-gray-600 mb-6 text-center">Quiz content would be displayed here</p>
             {selectedFile.questions && (
               <div>
-                <h3 className="font-semibold mb-2">Questions:</h3>
-                <div dangerouslySetInnerHTML={{ __html: selectedFile.questions }} />
+                <h3 className="font-semibold mb-4 text-lg">Questions:</h3>
+                <div className="bg-white p-4 rounded border" dangerouslySetInnerHTML={{ __html: selectedFile.questions }} />
               </div>
             )}
           </div>
@@ -480,10 +437,10 @@ const renderFileContent = () => {
     
     case 'coding-question':
       return (
-        <div className="p-4">
-          <h2 className="text-xl font-bold mb-4">{selectedFile.title}</h2>
-          <div className="bg-gray-900 text-white p-4 rounded-lg font-mono">
-            <pre className="whitespace-pre-wrap">
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-6 text-gray-800">{selectedFile.title}</h2>
+          <div className="bg-gray-900 text-white p-6 rounded-lg font-mono">
+            <pre className="whitespace-pre-wrap text-sm leading-relaxed">
               {selectedFile.problem || 'Coding problem content would be displayed here'}
             </pre>
           </div>
@@ -492,9 +449,9 @@ const renderFileContent = () => {
     
     default:
       return (
-        <div className="text-center py-12">
-          <File className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 mb-4">This content type cannot be previewed</p>
+        <div className="text-center py-16">
+          <File className="h-20 w-20 text-gray-400 mx-auto mb-6" />
+          <p className="text-gray-600 mb-4 text-lg">This content type cannot be previewed</p>
           <p className="text-sm text-gray-500">Content type: {selectedFile.type}</p>
         </div>
       );
@@ -504,7 +461,7 @@ const renderFileContent = () => {
   const renderCourseContents = (contents, courseId, level = 0) => {
     if (!contents || contents.length === 0) {
       return (
-        <div className="text-gray-500 italic py-2 pl-8">
+        <div className="text-gray-500 italic py-4 pl-8 text-sm">
           This folder is empty
         </div>
       );
@@ -517,19 +474,19 @@ const renderFileContent = () => {
         return (
           <div key={item._id} className="mb-1">
             <div 
-              className={`flex items-center py-2 px-4 hover:bg-gray-100 rounded cursor-pointer ${level > 0 ? 'pl-8' : ''}`}
+              className={`flex items-center py-3 px-4 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors ${level > 0 ? 'pl-8' : ''}`}
               onClick={() => toggleFolder(courseId, item._id)}
             >
               {isExpanded ? 
-                <ChevronDown className="h-4 w-4 mr-2" /> : 
-                <ChevronRight className="h-4 w-4 mr-2" />
+                <ChevronDown className="h-5 w-5 mr-3 text-gray-600" /> : 
+                <ChevronRight className="h-5 w-5 mr-3 text-gray-600" />
               }
-              <Folder className="h-5 w-5 text-yellow-500 mr-2" />
-              <span className="font-medium">{item.title}</span>
+              <Folder className="h-5 w-5 text-yellow-500 mr-3" />
+              <span className="font-medium text-gray-800">{item.title}</span>
             </div>
             
             {isExpanded && (
-              <div className="ml-6 border-l-2 border-gray-200 pl-2">
+              <div className="ml-8 border-l-2 border-gray-200 pl-3 mt-1">
                 {renderCourseContents(courseContents[item._id], courseId, level + 1)}
               </div>
             )}
@@ -539,18 +496,18 @@ const renderFileContent = () => {
         return (
           <div 
             key={item._id} 
-            className={`flex items-center py-2 px-4 hover:bg-gray-100 rounded ${level > 0 ? 'pl-8' : ''} ${enrollmentStatus[courseId] ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
+            className={`flex items-center py-3 px-4 hover:bg-gray-100 rounded-lg transition-colors ${level > 0 ? 'pl-8' : ''} ${enrollmentStatus[courseId] ? 'cursor-pointer hover:bg-blue-50' : 'cursor-not-allowed opacity-60'}`}
             onClick={() => enrollmentStatus[courseId] && handleFileClick({...item, courseId})}
           >
             {getFileIcon(item)}
-            <span className="ml-2 flex-1">{item.title}</span>
+            <span className="ml-3 flex-1 text-gray-800">{item.title}</span>
             {enrollmentStatus[courseId] ? (
               <Eye 
-                className="h-4 w-4 text-blue-500 hover:text-blue-700" 
+                className="h-5 w-5 text-blue-600 hover:text-blue-800 transition-colors" 
                 title="View content"
               />
             ) : (
-              <AlertCircle className="h-4 w-4 text-gray-400" title="Enroll to access" />
+              <AlertCircle className="h-5 w-5 text-gray-400" title="Enroll to access" />
             )}
           </div>
         );
@@ -558,7 +515,6 @@ const renderFileContent = () => {
     });
   };
 
-  // Clean up PDF URL when component unmounts or modal closes
   useEffect(() => {
     return () => {
       if (pdfUrl) {
@@ -574,80 +530,83 @@ const renderFileContent = () => {
   return (
     <DashboardLayout>
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-6">Available Courses</h1>
+        <h1 className="text-3xl font-bold mb-8 text-gray-800">Available Courses</h1>
 
         {loading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-600 mt-2">Loading courses...</p>
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-600 mt-4 text-lg">Loading courses...</p>
           </div>
         ) : error ? (
-          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
-            Error: {error}
+          <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg mb-8">
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 mr-3" />
+              <span>Error: {error}</span>
+            </div>
           </div>
         ) : courses.length === 0 ? (
-          <div className="text-center py-12">
-            <Book className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No courses available</h3>
+          <div className="text-center py-16">
+            <Book className="h-20 w-20 text-gray-300 mx-auto mb-6" />
+            <h3 className="text-xl font-medium text-gray-800 mb-3">No courses available</h3>
             <p className="text-gray-600">Check back later for new courses.</p>
           </div>
         ) : (
-          <div className="grid gap-6 grid-cols-1">
+          <div className="grid gap-8 grid-cols-1">
             {courses.map((course) => (
               <div
                 key={course._id}
-                className="bg-white rounded-2xl shadow p-5 border hover:shadow-lg transition"
+                className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100 hover:shadow-xl transition-all"
               >
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center">
                     {getTypeIcon(course.type)}
-                    <span className="ml-2 text-sm text-gray-500 capitalize">
+                    <span className="ml-3 text-sm text-gray-600 font-medium capitalize">
                       {course.type.replace('-', ' ')}
                     </span>
                   </div>
                   
                   {enrollmentStatus[course._id] && (
-                    <div className="flex items-center text-sm text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                      <CheckCircle className="h-4 w-4 mr-1" />
-                      <span>Enrolled</span>
+                    <div className="flex items-center text-sm text-green-700 bg-green-50 px-4 py-2 rounded-full">
+                      <CheckCircle className="h-5 w-5 mr-2" />
+                      <span className="font-medium">Enrolled</span>
                     </div>
                   )}
                 </div>
                 
-                <h2 className="text-xl font-semibold mb-2">{course.title}</h2>
-                <p className="text-gray-600 text-sm mb-3">{course.description}</p>
+                <h2 className="text-2xl font-semibold mb-4 text-gray-800">{course.title}</h2>
+                <p className="text-gray-600 mb-6 leading-relaxed">{course.description}</p>
                 
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center text-sm text-gray-500">
-                    <Users className="h-4 w-4 mr-1" />
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Users className="h-5 w-5 mr-3" />
                     <span>Instructor: {course.created_by?.name || 'Unknown'}</span>
                   </div>
                   
                   {course.duration && (
-                    <div className="flex items-center text-sm text-gray-500">
-                      <Clock className="h-4 w-4 mr-1" />
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Clock className="h-5 w-5 mr-3" />
                       <span>{course.duration}</span>
                     </div>
                   )}
                   
-                  <div className="flex items-center text-sm text-gray-500">
-                    <Tag className="h-4 w-4 mr-1" />
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Tag className="h-5 w-5 mr-3" />
                     <span>{course.category}</span>
                   </div>
                 </div>
                 
-                <div className="mb-4">
-                  <h3 className="font-medium mb-2">Course Content</h3>
-                  <div className="bg-gray-50 rounded-lg p-3 border">
+                <div className="mb-6">
+                  <h3 className="font-semibold text-lg mb-4 text-gray-800">Course Content</h3>
+                  <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
                     {courseContents[course._id] ? (
                       renderCourseContents(courseContents[course._id], course._id)
                     ) : (
-                      <div className="text-center py-4">
+                      <div className="text-center py-6">
                         <button 
                           onClick={() => fetchCourseContents(course._id)}
-                          className="text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center"
+                          className="text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center gap-2 transition-colors"
                         >
-                          <Folder className="h-4 w-4 mr-2" />
+                          <Folder className="h-5 w-5" />
                           View Course Contents
                         </button>
                       </div>
@@ -658,9 +617,9 @@ const renderFileContent = () => {
                 {!enrollmentStatus[course._id] && (
                   <button 
                     onClick={() => handleEnroll(course._id)}
-                    className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition flex items-center justify-center"
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white px-6 py-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-3 font-semibold text-lg shadow-md hover:shadow-lg"
                   >
-                    <CheckCircle className="h-5 w-5 mr-2" />
+                    <CheckCircle className="h-6 w-6" />
                     Enroll Now
                   </button>
                 )}
@@ -669,30 +628,30 @@ const renderFileContent = () => {
           </div>
         )}
 
-        {/* File Viewer Modal */}
         {fileViewerOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg w-full max-w-4xl max-h-screen overflow-auto">
-              <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white">
-                <h3 className="text-lg font-semibold">
+          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-6xl max-h-screen overflow-hidden flex flex-col">
+              <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10">
+                <h3 className="text-xl font-semibold text-gray-800 truncate max-w-2xl">
                   {selectedFile?.title || 'Loading...'}
                 </h3>
                 <button 
                   onClick={() => {
                     setFileViewerOpen(false);
                     setSelectedFile(null);
+                    setIsFullscreen(false);
                     if (pdfUrl) {
                       URL.revokeObjectURL(pdfUrl);
                       setPdfUrl(null);
                     }
                   }}
-                  className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100"
+                  className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
                 >
                   <X className="h-6 w-6" />
                 </button>
               </div>
               
-              <div className="p-6">
+              <div className="flex-1 overflow-auto p-6 bg-gray-50">
                 {renderFileContent()}
               </div>
             </div>
