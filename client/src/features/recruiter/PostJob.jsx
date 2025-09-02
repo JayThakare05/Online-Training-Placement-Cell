@@ -15,12 +15,21 @@ export default function PostJob() {
   const [verificationStatus, setVerificationStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [postedJobs, setPostedJobs] = useState([]); // New state for posted jobs
+  const [jobsLoading, setJobsLoading] = useState(false); // Loading state for jobs
 
   // Fetch recruiter info and verification status on component mount
   useEffect(() => {
     Promise.all([fetchRecruiterInfo(), fetchVerificationStatus()])
       .finally(() => setPageLoading(false));
   }, []);
+
+  // Fetch posted jobs when recruiter info is available and verified
+  useEffect(() => {
+    if (recruiterInfo && verificationStatus?.status === "approved") {
+      fetchPostedJobs();
+    }
+  }, [recruiterInfo, verificationStatus]);
 
   const fetchRecruiterInfo = async () => {
     try {
@@ -58,67 +67,90 @@ export default function PostJob() {
     }
   };
 
+  // New function to fetch posted jobs
+  const fetchPostedJobs = async () => {
+    try {
+      setJobsLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/jobs/recruiter/jobs', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setPostedJobs(data.jobs || []);
+      }
+    } catch (error) {
+      console.error('Error fetching posted jobs:', error);
+    } finally {
+      setJobsLoading(false);
+    }
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  // Frontend validation (can be bypassed, so backend validation is crucial)
-  if (verificationStatus?.status !== "approved") {
-    alert('Your account must be verified before posting jobs');
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const token = localStorage.getItem('token');
-    const jobPostData = {
-      title: formData.title,
-      description: formData.description,
-      location: formData.location,
-      salary: formData.salary,
-      skills: formData.skills,
-      type: formData.type,
-      // Don't send the entire recruiter object, just the ID
-      // The backend should fetch the latest recruiter info
-    };
-
-    const response = await fetch('http://localhost:5000/api/jobs/create', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(jobPostData)
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      alert('Job posted successfully!');
-      
-      // Reset form
-      setFormData({
-        title: "",
-        description: "",
-        location: "",
-        salary: "",
-        skills: "",
-        type: "Full-time",
-      });
-    } else {
-      const error = await response.json();
-      alert('Error posting job: ' + error.message);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Frontend validation (can be bypassed, so backend validation is crucial)
+    if (verificationStatus?.status !== "approved") {
+      alert('Your account must be verified before posting jobs');
+      return;
     }
-  } catch (error) {
-    console.error('Error posting job:', error);
-    alert('Error posting job. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
+
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const jobPostData = {
+        title: formData.title,
+        description: formData.description,
+        location: formData.location,
+        salary: formData.salary,
+        skills: formData.skills,
+        type: formData.type,
+      };
+
+      const response = await fetch('http://localhost:5000/api/jobs/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(jobPostData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert('Job posted successfully!');
+        
+        // Reset form
+        setFormData({
+          title: "",
+          description: "",
+          location: "",
+          salary: "",
+          skills: "",
+          type: "Full-time",
+        });
+        
+        // Refresh the posted jobs list
+        fetchPostedJobs();
+      } else {
+        const error = await response.json();
+        alert('Error posting job: ' + error.message);
+      }
+    } catch (error) {
+      console.error('Error posting job:', error);
+      alert('Error posting job. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Show loading while fetching initial data
   if (pageLoading) {
@@ -165,7 +197,43 @@ const handleSubmit = async (e) => {
     );
   };
 
-const isFormDisabled = verificationStatus?.status !== "approved";
+  // Function to render posted jobs
+  const renderPostedJobs = () => {
+    if (!postedJobs.length) return null;
+
+    return (
+      <div className="mt-10">
+        <h2 className="text-xl font-bold text-primary mb-4">Your Posted Jobs</h2>
+        <div className="space-y-4">
+          {postedJobs.map(job => (
+            <div key={job._id} className="p-4 border border-gray-200 rounded-lg bg-white shadow-sm">
+              <h3 className="font-semibold text-lg">{job.title}</h3>
+              <p className="text-sm text-gray-600 mt-1">{job.type} • {job.location}</p>
+              <p className="text-sm mt-2">{job.description.substring(0, 100)}...</p>
+              <div className="flex justify-between items-center mt-3">
+                <span className="text-sm text-gray-500">
+                  Posted: {new Date(job.createdAt).toLocaleDateString()}
+                </span>
+                <span className={`px-2 py-1 text-xs rounded-full ${
+                  job.status === 'active' 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {job.status}
+                </span>
+              </div>
+              <div className="mt-2 flex space-x-2">
+                <span className="text-sm text-blue-600">{job.applications.count} applications</span>
+                <span className="text-sm text-gray-600">{job.likes.count} likes</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const isFormDisabled = verificationStatus?.status !== "approved";
 
   return (
     <DashboardLayout role="recruiter">
@@ -177,14 +245,13 @@ const isFormDisabled = verificationStatus?.status !== "approved";
 
         {/* Recruiter Info */}
         {recruiterInfo && verificationStatus?.status === "approved" && (
-  <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-    <h3 className="font-semibold text-gray-700">Posting as:</h3>
-    <p className="text-sm text-gray-600">
-      {recruiterInfo.recruiter_name || recruiterInfo.name} - {recruiterInfo.company_name}
-    </p>
-  </div>
-)}
-
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+            <h3 className="font-semibold text-gray-700">Posting as:</h3>
+            <p className="text-sm text-gray-600">
+              {recruiterInfo.recruiter_name || recruiterInfo.name} - {recruiterInfo.company_name}
+            </p>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -283,7 +350,7 @@ const isFormDisabled = verificationStatus?.status !== "approved";
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isFormDisabled}
+            disabled={isFormDisabled || loading}
             className={`w-full py-3 rounded-lg transition ${
               isFormDisabled 
                 ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
@@ -298,16 +365,28 @@ const isFormDisabled = verificationStatus?.status !== "approved";
 
         {/* Help text for unverified users */}
         {verificationStatus?.status !== "approved" && (
-  <div className="mt-4 text-center text-sm text-gray-600">
-    {verificationStatus?.status === 'pending' && (
-      <p>Your account is under review. You'll be able to post jobs once verified.</p>
-    )}
-    {verificationStatus?.status === 'rejected' && (
-      <p>Please contact support to resolve your account verification issues.</p>
-    )}
-  </div>
-)}
+          <div className="mt-4 text-center text-sm text-gray-600">
+            {verificationStatus?.status === 'pending' && (
+              <p>Your account is under review. You'll be able to post jobs once verified.</p>
+            )}
+            {verificationStatus?.status === 'rejected' && (
+              <p>Please contact support to resolve your account verification issues.</p>
+            )}
+          </div>
+        )}
 
+        {/* Posted Jobs Section */}
+        {verificationStatus?.status === "approved" && (
+          <>
+            {jobsLoading ? (
+              <div className="mt-10 flex justify-center">
+                <div className="text-lg">Loading your posted jobs...</div>
+              </div>
+            ) : (
+              renderPostedJobs()
+            )}
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

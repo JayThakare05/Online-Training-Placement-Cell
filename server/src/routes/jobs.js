@@ -243,4 +243,28 @@ router.post('/posts/:jobId/apply', authenticateToken, async (req, res) => {
   }
 });
 
+// ================== GET JOBS POSTED BY CURRENT RECRUITER ==================
+router.get('/recruiter/jobs', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'recruiter') {
+      return res.status(403).json({ message: 'Only recruiters can access this endpoint' });
+    }
+
+    const jobs = await JobPost.find({ 
+      'recruiter.user_id': req.user.id 
+    })
+    .sort({ createdAt: -1 })
+    .select('-applications.applied_users') // Exclude sensitive application data
+    .exec();
+
+    res.json({
+      jobs,
+      count: jobs.length
+    });
+  } catch (error) {
+    console.error('Error fetching recruiter jobs:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 export default router;
