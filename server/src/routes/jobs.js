@@ -69,8 +69,10 @@ router.post('/create', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+const userCache = new Map();
 
-
+// ================== GET ALL JOB POSTS ==================
+// ================== GET ALL JOB POSTS ==================
 // ================== GET ALL JOB POSTS ==================
 router.get('/posts', async (req, res) => {
   try {
@@ -108,7 +110,7 @@ router.get('/posts', async (req, res) => {
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .select('-applications.applied_users') // Exclude sensitive application data
-      .exec();
+      .exec(); // REMOVE .populate('comments.user') - it's not needed
 
     const total = await JobPost.countDocuments(query);
 
@@ -180,19 +182,42 @@ router.post('/posts/:jobId/comments', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Job post not found' });
     }
 
+    let userName;
+    
+    // Check cache first
+    if (userCache.has(req.user.id)) {
+      userName = userCache.get(req.user.id);
+    } else {
+      // Fetch from database if not in cache
+      const pool = getMySQLPool();
+      const [userRows] = await pool.query(
+        "SELECT name FROM users WHERE id = ?",
+        [req.user.id]
+      );
+
+      if (userRows.length === 0) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      userName = userRows[0].name;
+      // Cache the result for 1 hour
+      userCache.set(req.user.id, userName);
+      setTimeout(() => userCache.delete(req.user.id), 60 * 60 * 1000);
+    }
+
     const newComment = {
       user: {
         user_id: req.user.id,
-        name: req.user.name,
+        name: userName,
         role: req.user.role
       },
-      content: content.trim()
+      content: content.trim(),
+      created_at: new Date()
     };
 
     jobPost.comments.push(newComment);
     await jobPost.save();
 
-    // Return the newly added comment
     const addedComment = jobPost.comments[jobPost.comments.length - 1];
     
     res.status(201).json({
@@ -201,6 +226,73 @@ router.post('/posts/:jobId/comments', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error adding comment:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ================== UPDATE COMMENT ==================
+router.put('/posts/:jobId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ message: 'Comment content is required' });
+    }
+
+    const jobPost = await JobPost.findById(req.params.jobId);
+    if (!jobPost) {
+      return res.status(404).json({ message: 'Job post not found' });
+    }
+
+    const comment = jobPost.comments.id(req.params.commentId);
+    if (!comment) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
+
+    // Check if user owns the comment or is admin
+    if (comment.user.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'You can only edit your own comments' });
+    }
+
+    comment.content = content.trim();
+    comment.updated_at = new Date();
+    
+    await jobPost.save();
+
+    res.json({
+      message: 'Comment updated successfully',
+      comment: comment
+    });
+  } catch (error) {
+    console.error('Error updating comment:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ================== DELETE COMMENT ==================
+router.delete('/posts/:jobId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const jobPost = await JobPost.findById(req.params.jobId);
+    if (!jobPost) {
+      return res.status(404).json({ message: 'Job post not found' });
+    }
+
+    const comment = jobPost.comments.id(req.params.commentId);
+    if (!comment) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
+
+    // Check if user owns the comment or is admin
+    if (comment.user.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'You can only delete your own comments' });
+    }
+
+    // Remove the comment
+    jobPost.comments.pull({ _id: req.params.commentId });
+    await jobPost.save();
+
+    res.json({ message: 'Comment deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting comment:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

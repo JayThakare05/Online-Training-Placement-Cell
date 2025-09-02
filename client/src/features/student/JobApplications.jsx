@@ -1,13 +1,191 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout";
+import { Heart, MessageSquare, Send, X, Edit, Trash2, Check, XCircle } from "lucide-react";
 
 function JobCard({ job }) {
+  const [likes, setLikes] = useState(job.likes?.count || 0);
+  const [isLiked, setIsLiked] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState(job.comments || []);
+  const [newComment, setNewComment] = useState("");
+  const [commentLoading, setCommentLoading] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentText, setEditCommentText] = useState("");
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  // Get current user ID from token
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setCurrentUserId(payload.id);
+        
+        const userLike = job.likes?.users?.find(like => like.user_id === payload.id);
+        setIsLiked(!!userLike);
+      } catch (error) {
+        console.error("Error decoding token:", error);
+      }
+    }
+  }, [job.likes?.users]);
+
   // Convert skills to array if it's a string
   const skillsArray = Array.isArray(job.skills) 
     ? job.skills 
     : job.skills 
       ? job.skills.split(',').map(skill => skill.trim()) 
       : [];
+
+  const handleLike = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      
+      if (!token) {
+        alert("You need to be logged in to like jobs");
+        return;
+      }
+      
+      const response = await fetch(`http://localhost:5000/api/jobs/posts/${job._id}/like`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to like job");
+      }
+
+      const result = await response.json();
+      setLikes(result.likes_count);
+      setIsLiked(result.liked);
+    } catch (error) {
+      console.error("Error liking job:", error);
+      alert("Failed to like job. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+
+    try {
+      setCommentLoading(true);
+      const token = localStorage.getItem("token");
+      
+      if (!token) {
+        alert("You need to be logged in to comment");
+        return;
+      }
+
+      const response = await fetch(`http://localhost:5000/api/jobs/posts/${job._id}/comments`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ content: newComment.trim() })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add comment");
+      }
+
+      const result = await response.json();
+      setComments(prev => [...prev, result.comment]);
+      setNewComment("");
+    } catch (error) {
+      console.error("Error adding comment:", error);
+      alert("Failed to add comment. Please try again.");
+    } finally {
+      setCommentLoading(false);
+    }
+  };
+
+  const handleEditComment = (comment) => {
+    setEditingCommentId(comment._id || comment.comment_id);
+    setEditCommentText(comment.content);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCommentId(null);
+    setEditCommentText("");
+  };
+
+  const handleSaveEdit = async (commentId) => {
+    if (!editCommentText.trim()) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`http://localhost:5000/api/jobs/posts/${job._id}/comments/${commentId}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ content: editCommentText.trim() })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update comment");
+      }
+
+      const result = await response.json();
+      setComments(prev => prev.map(comment => 
+        comment._id === commentId || comment.comment_id === commentId 
+          ? result.comment 
+          : comment
+      ));
+      setEditingCommentId(null);
+      setEditCommentText("");
+    } catch (error) {
+      console.error("Error updating comment:", error);
+      alert("Failed to update comment. Please try again.");
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm("Are you sure you want to delete this comment?")) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`http://localhost:5000/api/jobs/posts/${job._id}/comments/${commentId}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete comment");
+      }
+
+      setComments(prev => prev.filter(comment => 
+        comment._id !== commentId && comment.comment_id !== commentId
+      ));
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      alert("Failed to delete comment. Please try again.");
+    }
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const canEditComment = (comment) => {
+    return currentUserId && comment.user.user_id === currentUserId;
+  };
 
   return (
     <div className="bg-white shadow-md rounded-xl border border-gray-200 max-w-xl mx-auto my-6">
@@ -57,11 +235,148 @@ function JobCard({ job }) {
         </p>
       </div>
 
-      {/* Apply Button */}
+      {/* Like and Apply Section */}
       <div className="px-4 pb-4">
-        <button className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition">
-          Apply Now
-        </button>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleLike}
+              disabled={loading}
+              className={`flex items-center gap-1 p-2 rounded-lg transition-colors ${
+                isLiked 
+                  ? "text-red-500 bg-red-50" 
+                  : "text-gray-500 hover:text-red-500 hover:bg-red-50"
+              }`}
+            >
+              <Heart 
+                size={18} 
+                fill={isLiked ? "currentColor" : "none"} 
+              />
+              <span className="text-sm">{likes}</span>
+            </button>
+            
+            <button
+              onClick={() => setShowComments(!showComments)}
+              className="flex items-center gap-1 text-gray-500 p-2 rounded-lg hover:text-blue-500 hover:bg-blue-50"
+            >
+              <MessageSquare size={18} />
+              <span className="text-sm">{comments.length}</span>
+            </button>
+          </div>
+          
+          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition flex items-center gap-2">
+            <Send size={16} />
+            Apply Now
+          </button>
+        </div>
+
+        {/* Comments Section */}
+        {showComments && (
+          <div className="mt-4 border-t pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-gray-900">Comments</h4>
+              <button
+                onClick={() => setShowComments(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Add Comment Form */}
+            <div className="mb-4">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Add a comment..."
+                className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows="2"
+              />
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={handleAddComment}
+                  disabled={commentLoading || !newComment.trim()}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {commentLoading ? "Posting..." : "Post Comment"}
+                </button>
+              </div>
+            </div>
+
+            {/* Comments List */}
+            <div className="space-y-3 max-h-60 overflow-y-auto">
+              {comments.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">No comments yet</p>
+              ) : (
+                comments.map((comment) => (
+                  <div key={comment.comment_id || comment._id} className="bg-gray-50 p-3 rounded-lg">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-gray-900">{comment.user.name}</span>
+                          <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded-full">
+                            {comment.user.role}
+                          </span>
+                        </div>
+                        
+                        {editingCommentId === (comment._id || comment.comment_id) ? (
+                          <div className="mb-2">
+                            <textarea
+                              value={editCommentText}
+                              onChange={(e) => setEditCommentText(e.target.value)}
+                              className="w-full p-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500"
+                              rows="2"
+                            />
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={() => handleSaveEdit(comment._id || comment.comment_id)}
+                                className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                onClick={handleCancelEdit}
+                                className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600"
+                              >
+                                <XCircle size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-gray-700 text-sm">{comment.content}</p>
+                        )}
+                        
+                        <p className="text-xs text-gray-400 mt-1">
+                          {formatDate(comment.created_at || comment.createdAt)}
+                          {comment.updated_at && " (edited)"}
+                        </p>
+                      </div>
+                      
+                      {canEditComment(comment) && editingCommentId !== (comment._id || comment.comment_id) && (
+                        <div className="flex gap-2 ml-2">
+                          <button
+                            onClick={() => handleEditComment(comment)}
+                            className="text-blue-500 hover:text-blue-700"
+                            title="Edit comment"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteComment(comment._id || comment.comment_id)}
+                            className="text-red-500 hover:text-red-700"
+                            title="Delete comment"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -76,7 +391,7 @@ export default function JobFeed() {
     const fetchJobs = async () => {
       try {
         setLoading(true);
-        const response = await fetch("http://localhost:5000/api/jobs/posts"); // ✅ Correct endpoint
+        const response = await fetch("http://localhost:5000/api/jobs/posts");
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -87,7 +402,7 @@ export default function JobFeed() {
         if (data.jobs) {
           setJobs(data.jobs);
         } else {
-          setJobs(data.data || []); // Handle different response structures
+          setJobs(data.data || []);
         }
       } catch (err) {
         console.error("Error fetching jobs:", err);
