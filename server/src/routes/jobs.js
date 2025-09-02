@@ -267,4 +267,114 @@ router.get('/recruiter/jobs', authenticateToken, async (req, res) => {
   }
 });
 
+// ================== GET SINGLE JOB POST (FOR EDITING) ==================
+router.get('/posts/:jobId', authenticateToken, async (req, res) => {
+  try {
+    const jobPost = await JobPost.findById(req.params.jobId);
+    
+    if (!jobPost) {
+      return res.status(404).json({ message: 'Job post not found' });
+    }
+
+    // Check if the user owns this job post
+    if (jobPost.recruiter.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. You can only edit your own job posts.' });
+    }
+
+    res.json(jobPost);
+  } catch (error) {
+    console.error('Error fetching job post:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ================== UPDATE JOB POST ==================
+router.put('/posts/:jobId', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'recruiter' && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only recruiters and admins can update jobs' });
+    }
+
+    const jobPost = await JobPost.findById(req.params.jobId);
+    
+    if (!jobPost) {
+      return res.status(404).json({ message: 'Job post not found' });
+    }
+
+    // Check if the user owns this job post (unless admin)
+    if (jobPost.recruiter.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. You can only edit your own job posts.' });
+    }
+
+    // Update job fields
+    const updatableFields = ['title', 'description', 'location', 'salary', 'skills', 'type', 'status'];
+    updatableFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        jobPost[field] = req.body[field];
+      }
+    });
+
+    // Regenerate slug if title changed
+    if (req.body.title && req.body.title !== jobPost.title) {
+      jobPost.slug = jobPost.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') + '-' + Date.now();
+    }
+
+    await jobPost.save();
+
+    res.json({
+      message: 'Job updated successfully',
+      job: jobPost
+    });
+  } catch (error) {
+    console.error('Error updating job post:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Add this route to your existing job routes file, after the UPDATE route
+
+// ================== DELETE JOB POST ==================
+router.delete('/posts/:jobId', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'recruiter' && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only recruiters and admins can delete jobs' });
+    }
+
+    const jobPost = await JobPost.findById(req.params.jobId);
+    
+    if (!jobPost) {
+      return res.status(404).json({ message: 'Job post not found' });
+    }
+
+    // Check if the user owns this job post (unless admin)
+    if (jobPost.recruiter.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. You can only delete your own job posts.' });
+    }
+
+    // Check if job has applications - you might want to prevent deletion or handle this differently
+    if (jobPost.applications.count > 0) {
+      // Option 1: Prevent deletion if there are applications
+      return res.status(400).json({ 
+        message: `Cannot delete job with ${jobPost.applications.count} existing applications. Consider changing status to 'closed' instead.` 
+      });
+      
+      // Option 2: Allow deletion but warn (comment out above and uncomment below)
+      // console.log(`Warning: Deleting job "${jobPost.title}" with ${jobPost.applications.count} applications`);
+    }
+
+    // Delete the job post
+    await JobPost.findByIdAndDelete(req.params.jobId);
+
+    res.json({
+      message: 'Job post deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting job post:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 export default router;

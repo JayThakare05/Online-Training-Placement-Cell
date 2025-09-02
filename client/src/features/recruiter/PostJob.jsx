@@ -15,8 +15,11 @@ export default function PostJob() {
   const [verificationStatus, setVerificationStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
-  const [postedJobs, setPostedJobs] = useState([]); // New state for posted jobs
-  const [jobsLoading, setJobsLoading] = useState(false); // Loading state for jobs
+  const [postedJobs, setPostedJobs] = useState([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [editingJob, setEditingJob] = useState(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(null); // Track which job is being deleted
 
   // Fetch recruiter info and verification status on component mount
   useEffect(() => {
@@ -67,7 +70,6 @@ export default function PostJob() {
     }
   };
 
-  // New function to fetch posted jobs
   const fetchPostedJobs = async () => {
     try {
       setJobsLoading(true);
@@ -96,7 +98,6 @@ export default function PostJob() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Frontend validation (can be bypassed, so backend validation is crucial)
     if (verificationStatus?.status !== "approved") {
       alert('Your account must be verified before posting jobs');
       return;
@@ -152,6 +153,163 @@ export default function PostJob() {
     }
   };
 
+  // Function to start editing a job
+  const startEditJob = async (jobId) => {
+    try {
+      setEditLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/jobs/posts/${jobId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const jobData = await response.json();
+        setEditingJob(jobData);
+        // Pre-fill the form with the job data
+        setFormData({
+          title: jobData.title,
+          description: jobData.description,
+          location: jobData.location,
+          salary: jobData.salary,
+          skills: jobData.skills,
+          type: jobData.type,
+        });
+        // Scroll to the form
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        alert('Error loading job for editing');
+      }
+    } catch (error) {
+      console.error('Error fetching job for editing:', error);
+      alert('Error loading job for editing');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  // Function to cancel editing
+  const cancelEdit = () => {
+    setEditingJob(null);
+    setFormData({
+      title: "",
+      description: "",
+      location: "",
+      salary: "",
+      skills: "",
+      type: "Full-time",
+    });
+  };
+
+  // Function to update a job
+  const updateJob = async (e) => {
+    e.preventDefault();
+    
+    if (!editingJob) return;
+
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/jobs/posts/${editingJob._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert('Job updated successfully!');
+        
+        // Reset form and editing state
+        setEditingJob(null);
+        setFormData({
+          title: "",
+          description: "",
+          location: "",
+          salary: "",
+          skills: "",
+          type: "Full-time",
+        });
+        
+        // Refresh the posted jobs list
+        fetchPostedJobs();
+      } else {
+        const error = await response.json();
+        alert('Error updating job: ' + error.message);
+      }
+    } catch (error) {
+      console.error('Error updating job:', error);
+      alert('Error updating job. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to update job status
+  const updateJobStatus = async (jobId, newStatus) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/jobs/posts/${jobId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (response.ok) {
+        alert('Job status updated successfully!');
+        // Refresh the posted jobs list
+        fetchPostedJobs();
+      } else {
+        const error = await response.json();
+        alert('Error updating job status: ' + error.message);
+      }
+    } catch (error) {
+      console.error('Error updating job status:', error);
+      alert('Error updating job status. Please try again.');
+    }
+  };
+
+  // Function to delete a job
+  const deleteJob = async (jobId, jobTitle) => {
+    // Show confirmation dialog
+    if (!window.confirm(`Are you sure you want to delete the job "${jobTitle}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setDeleteLoading(jobId); // Set loading state for this specific job
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/jobs/posts/${jobId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        alert('Job deleted successfully!');
+        // Remove the deleted job from the state immediately for better UX
+        setPostedJobs(prevJobs => prevJobs.filter(job => job._id !== jobId));
+      } else {
+        const error = await response.json();
+        alert('Error deleting job: ' + error.message);
+      }
+    } catch (error) {
+      console.error('Error deleting job:', error);
+      alert('Error deleting job. Please try again.');
+    } finally {
+      setDeleteLoading(null); // Clear loading state
+    }
+  };
+
   // Show loading while fetching initial data
   if (pageLoading) {
     return (
@@ -197,7 +355,7 @@ export default function PostJob() {
     );
   };
 
-  // Function to render posted jobs
+  // Function to render posted jobs with edit and delete options
   const renderPostedJobs = () => {
     if (!postedJobs.length) return null;
 
@@ -207,7 +365,35 @@ export default function PostJob() {
         <div className="space-y-4">
           {postedJobs.map(job => (
             <div key={job._id} className="p-4 border border-gray-200 rounded-lg bg-white shadow-sm">
-              <h3 className="font-semibold text-lg">{job.title}</h3>
+              <div className="flex justify-between items-start">
+                <h3 className="font-semibold text-lg">{job.title}</h3>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => startEditJob(job._id)}
+                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200"
+                    disabled={editLoading || deleteLoading === job._id}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => deleteJob(job._id, job.title)}
+                    disabled={deleteLoading === job._id || editLoading}
+                    className="px-3 py-1 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deleteLoading === job._id ? 'Deleting...' : 'Delete'}
+                  </button>
+                  <select
+                    value={job.status}
+                    onChange={(e) => updateJobStatus(job._id, e.target.value)}
+                    className="px-2 py-1 border rounded text-sm"
+                    disabled={deleteLoading === job._id}
+                  >
+                    <option value="active">Active</option>
+                    <option value="closed">Closed</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                </div>
+              </div>
               <p className="text-sm text-gray-600 mt-1">{job.type} • {job.location}</p>
               <p className="text-sm mt-2">{job.description.substring(0, 100)}...</p>
               <div className="flex justify-between items-center mt-3">
@@ -217,6 +403,8 @@ export default function PostJob() {
                 <span className={`px-2 py-1 text-xs rounded-full ${
                   job.status === 'active' 
                     ? 'bg-green-100 text-green-800' 
+                    : job.status === 'closed'
+                    ? 'bg-red-100 text-red-800'
                     : 'bg-gray-100 text-gray-800'
                 }`}>
                   {job.status}
@@ -238,7 +426,9 @@ export default function PostJob() {
   return (
     <DashboardLayout role="recruiter">
       <div className="max-w-3xl mx-auto p-6 bg-white rounded-xl shadow">
-        <h1 className="text-2xl font-bold text-primary mb-6">Post a New Job</h1>
+        <h1 className="text-2xl font-bold text-primary mb-6">
+          {editingJob ? `Edit Job: ${editingJob.title}` : 'Post a New Job'}
+        </h1>
 
         {/* Verification Status */}
         {renderVerificationStatus()}
@@ -254,7 +444,7 @@ export default function PostJob() {
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={editingJob ? updateJob : handleSubmit} className="space-y-5">
           {/* Job Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Job Title</label>
@@ -347,20 +537,33 @@ export default function PostJob() {
             </select>
           </div>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isFormDisabled || loading}
-            className={`w-full py-3 rounded-lg transition ${
-              isFormDisabled 
-                ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
-                : 'bg-primary text-white hover:bg-orange-600'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            {loading ? 'Posting Job...' : 
-             isFormDisabled ? 'Account Verification Required' : 
-             'Post Job'}
-          </button>
+          {/* Submit/Cancel Buttons */}
+          <div className="flex space-x-4">
+            <button
+              type="submit"
+              disabled={isFormDisabled || loading}
+              className={`flex-1 py-3 rounded-lg transition ${
+                isFormDisabled 
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                  : 'bg-primary text-white hover:bg-orange-600'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {loading ? (editingJob ? 'Updating Job...' : 'Posting Job...') : 
+               isFormDisabled ? 'Account Verification Required' : 
+               editingJob ? 'Update Job' : 'Post Job'}
+            </button>
+            
+            {editingJob && (
+              <button
+                type="button"
+                onClick={cancelEdit}
+                disabled={loading}
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
 
         {/* Help text for unverified users */}
