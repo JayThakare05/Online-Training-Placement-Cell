@@ -299,7 +299,8 @@ const renderFileContent = () => {
       (selectedFile.url && selectedFile.url.toLowerCase().includes('.pdf'))) {
     
     let pdfSource = pdfUrl || selectedFile.blobUrl || selectedFile.url;
-    const viewerUrl = pdfSource.startsWith('blob:') ? pdfSource : `${pdfSource}#view=FitH&toolbar=0&navpanes=0`;
+    // Hide the toolbar to remove the print and download buttons
+    const viewerUrl = `${pdfSource}#toolbar=0`;
     
     return (
       <div className="w-full">
