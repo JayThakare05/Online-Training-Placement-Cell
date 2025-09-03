@@ -43,24 +43,41 @@ const ProgressCircle = ({ count, total, label, color = 'blue' }) => {
 };
 
 // Contribution Graph Component
-const ContributionGraph = () => {
+const ContributionGraph = ({ codingActivity }) => {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const currentMonth = new Date().getMonth();
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
 
-  // Generate last 6 months of contributions
+  // Generate last 6 months of contributions with actual activity data
   const generateContributions = () => {
     const contributions = [];
+    
     for (let i = 5; i >= 0; i--) {
       const monthIndex = (currentMonth - i + 12) % 12;
-      const daysInMonth = new Date(2024, monthIndex + 1, 0).getDate();
+      const year = currentYear - (i > currentMonth ? 1 : 0);
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
       const monthData = [];
 
       for (let day = 1; day <= daysInMonth; day++) {
-        const level = 0; // start as empty
+        const key = `${year}-${monthIndex}-${day}`;
+        const activityCount = codingActivity[key] || 0;
+        
+        // Determine activity level based on count
+        let level = 0;
+        if (activityCount > 0) level = 1;
+        if (activityCount > 1) level = 2;
+        if (activityCount > 3) level = 3;
+        if (activityCount > 5) level = 4;
+        
         monthData.push({ day, level });
       }
 
-      contributions.push({ month: months[monthIndex], days: monthData });
+      contributions.push({ 
+        month: months[monthIndex], 
+        year,
+        days: monthData 
+      });
     }
     return contributions;
   };
@@ -78,13 +95,13 @@ const ContributionGraph = () => {
       <div className="flex space-x-4 overflow-x-auto">
         {contributions.map((month, monthIndex) => (
           <div key={monthIndex}>
-            <div className="text-xs text-gray-500 text-center mb-1">{month.month}</div>
+            <div className="text-xs text-gray-500 text-center mb-1">{month.month} {month.year}</div>
             <div className="grid grid-cols-7 gap-1">
               {month.days.map((day, dayIndex) => (
                 <div
                   key={dayIndex}
                   className={`w-3 h-3 rounded-sm ${getLevelColor(day.level)}`}
-                  title={`${month.month} ${day.day}: ${day.level} contributions`}
+                  title={`${month.month} ${day.day}, ${month.year}: ${codingActivity[`${month.year}-${months.indexOf(month.month)}-${day.day}`] || 0} problems solved`}
                 />
               ))}
             </div>
@@ -110,6 +127,8 @@ export default function StudentDashboard() {
   const [error, setError] = useState(null);
   const [activities, setActivities] = useState([]);
   const [mockInterviews, setMockInterviews] = useState({ completed: 0, total: 5 });
+  const [solvedProblems, setSolvedProblems] = useState({ solved: 0, total: 100 });
+  const [codingActivity, setCodingActivity] = useState({});
 
   // Fetch data when component mounts
   useEffect(() => {
@@ -132,20 +151,59 @@ export default function StudentDashboard() {
         if (!historyResponse.ok) throw new Error('Failed to fetch interview history');
         const historyData = await historyResponse.json();
 
-        // Update mockInterviews state with the count from the API
-        const completedCount = historyData.attempts.length;
-        setMockInterviews({ completed: completedCount, total: 5 }); // Assuming a total of 5 for now
+        // Fetch solved problems count
+        const userId = localStorage.getItem('userId');
+        const solvedResponse = await fetch(`http://localhost:5000/api/compiler/solved-count/${userId}`, { headers });
+        let solvedCount = 0;
+        if (solvedResponse.ok) {
+          const solvedData = await solvedResponse.json();
+          solvedCount = solvedData.solvedProblemsCount;
+        }
 
-        // Set recent activities based on fetched history
-        const recentActivities = historyData.attempts.slice(0, 5).map(attempt => ({
+        // Fetch coding activity
+        const activityResponse = await fetch(`http://localhost:5000/api/compiler/coding-activity/${userId}`, { headers });
+        let activityData = {};
+        if (activityResponse.ok) {
+          const activityResult = await activityResponse.json();
+          activityData = activityResult.activity || {};
+        }
+
+        // Fetch recent solutions for activities
+        const solutionsResponse = await fetch(`http://localhost:5000/api/compiler/recent-solutions/${userId}`, { headers });
+        let recentSolutions = [];
+        if (solutionsResponse.ok) {
+          const solutionsData = await solutionsResponse.json();
+          recentSolutions = solutionsData.solutions || [];
+        }
+
+        // Update states
+        const completedCount = historyData.attempts.length;
+        setMockInterviews({ completed: completedCount, total: 5 });
+        setSolvedProblems({ solved: solvedCount, total: 100 });
+        setCodingActivity(activityData);
+
+        // Set recent activities - combine mock interviews and coding solutions
+        const interviewActivities = historyData.attempts.slice(0, 3).map(attempt => ({
           id: attempt._id,
-          title: `Mock Interview: ${attempt.topic}`,
+          title: `Mock Interview: ${attempt.type}`,
           type: 'Mock Interview',
           date: new Date(attempt.timestamp).toLocaleDateString(),
           status: 'completed',
-          score: attempt.score ? `${attempt.score}/100` : 'N/A',
+          score: attempt.score,
         }));
-        setActivities(recentActivities);
+
+        // Add coding solutions to activities
+        const codingActivities = recentSolutions.slice(0, 2).map(solution => ({
+          id: solution._id,
+          title: `Solved: ${solution.questionName || 'Coding Problem'}`,
+          type: 'Coding Solution',
+          date: new Date(solution.submittedAt).toLocaleDateString(),
+          status: solution.isCorrect ? 'completed' : 'attempted',
+          score: solution.score,
+        }));
+
+        // Combine activities, showing most recent first
+        setActivities([...interviewActivities, ...codingActivities].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5));
 
       } catch (err) {
         console.error("Dashboard data fetching error:", err);
@@ -157,6 +215,10 @@ export default function StudentDashboard() {
 
     fetchData();
   }, []);
+
+  // Calculate the overall score
+  const overallScoreCount = mockInterviews.completed + solvedProblems.solved;
+  const overallScoreTotal = mockInterviews.total + solvedProblems.total;
 
   if (loading) {
     return (
@@ -237,14 +299,13 @@ export default function StudentDashboard() {
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Learning Progress</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <ProgressCircle count={mockInterviews.completed} total={mockInterviews.total} label="Mock Interviews" color="blue" />
-                <ProgressCircle count={0} total={10} label="Coding Battles" color="green" />
-                <ProgressCircle count={0} total={20} label="Technical Skills" color="purple" />
-                <ProgressCircle count={0} total={100} label="Overall Score" color="orange" />
+                <ProgressCircle count={solvedProblems.solved} total={solvedProblems.total} label="Problems Solved" color="green" />
+                <ProgressCircle count={overallScoreCount} total={overallScoreTotal} label="Overall Score" color="orange" />
               </div>
             </div>
 
             {/* Contribution Graph */}
-            <ContributionGraph />
+            <ContributionGraph codingActivity={codingActivity} />
           </div>
         </div>
 
@@ -288,7 +349,10 @@ export default function StudentDashboard() {
                       {activity.status}
                     </span>
                     {activity.score && (
-                      <p className="text-sm text-gray-600 mt-1">Score: {activity.score}</p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Score: {activity.score}
+                        {activity.type === 'Mock Interview' ? '/50' : '/100'}
+                      </p>
                     )}
                   </div>
                 </div>
