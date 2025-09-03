@@ -1,7 +1,7 @@
 import express from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
-import Attempt from '../models/Attempts.js'; // Import the new model
+import Attempt from '../models/Attempt.js';
 
 const router = express.Router();
 dotenv.config();
@@ -93,6 +93,17 @@ router.post('/submit-answers', async (req, res) => {
   } catch (error) {
     console.error('Error scoring and saving answers:', error);
     res.status(500).json({ error: 'Failed to score and save the interview.' });
+  }
+});
+
+// NEW ROUTE to fetch all past interview attempts
+router.get('/history', async (req, res) => {
+  try {
+    const attempts = await Attempt.find().sort({ timestamp: -1 });
+    res.json({ attempts });
+  } catch (error) {
+    console.error('Error fetching interview history:', error);
+    res.status(500).json({ error: 'Failed to fetch interview history.' });
   }
 });
 
