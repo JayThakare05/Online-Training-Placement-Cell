@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 
 const attemptSchema = new mongoose.Schema({
+  userId: {
+    type: String,
+    required: true,
+  },
   type: {
     type: String,
     required: true,

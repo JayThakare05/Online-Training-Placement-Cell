@@ -3,7 +3,8 @@ import { User, Mail, BookOpen, Calendar, Award, TrendingUp } from 'lucide-react'
 import DashboardLayout from '../../components/DashboardLayout';
 
 // Progress Circle Component
-const ProgressCircle = ({ percentage, label, color = 'blue' }) => {
+const ProgressCircle = ({ count, total, label, color = 'blue' }) => {
+  const percentage = total > 0 ? (count / total) * 100 : 0;
   const strokeDasharray = 2 * Math.PI * 45;
   const strokeDashoffset = strokeDasharray - (strokeDasharray * percentage) / 100;
 
@@ -33,7 +34,7 @@ const ProgressCircle = ({ percentage, label, color = 'blue' }) => {
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className={`text-lg font-bold ${colorClasses[color]}`}>{percentage}%</span>
+          <span className={`text-lg font-bold ${colorClasses[color]}`}>{count}/{total}</span>
         </div>
       </div>
       <span className="text-sm text-gray-600 mt-2 text-center">{label}</span>
@@ -108,31 +109,53 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activities, setActivities] = useState([]);
+  const [mockInterviews, setMockInterviews] = useState({ completed: 0, total: 5 });
 
-  // Fetch profile when component mounts
+  // Fetch data when component mounts
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:5000/api/auth/profile', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        const headers = {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        };
 
-        if (!response.ok) throw new Error('Failed to fetch profile');
+        // Fetch profile
+        const profileResponse = await fetch('http://localhost:5000/api/auth/profile', { headers });
+        if (!profileResponse.ok) throw new Error('Failed to fetch profile');
+        const profileData = await profileResponse.json();
+        setProfile(profileData);
 
-        const data = await response.json();
-        setProfile(data);
+        // Fetch mock interview history
+        const historyResponse = await fetch('http://localhost:5000/api/mockInterview/history', { headers });
+        if (!historyResponse.ok) throw new Error('Failed to fetch interview history');
+        const historyData = await historyResponse.json();
+
+        // Update mockInterviews state with the count from the API
+        const completedCount = historyData.attempts.length;
+        setMockInterviews({ completed: completedCount, total: 5 }); // Assuming a total of 5 for now
+
+        // Set recent activities based on fetched history
+        const recentActivities = historyData.attempts.slice(0, 5).map(attempt => ({
+          id: attempt._id,
+          title: `Mock Interview: ${attempt.topic}`,
+          type: 'Mock Interview',
+          date: new Date(attempt.timestamp).toLocaleDateString(),
+          status: 'completed',
+          score: attempt.score ? `${attempt.score}/100` : 'N/A',
+        }));
+        setActivities(recentActivities);
+
       } catch (err) {
-        setError(err.message || 'Failed to fetch profile');
+        console.error("Dashboard data fetching error:", err);
+        setError(err.message || 'Failed to fetch dashboard data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProfile();
+    fetchData();
   }, []);
 
   if (loading) {
@@ -213,10 +236,10 @@ export default function StudentDashboard() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Learning Progress</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <ProgressCircle percentage={0} label="Mock Interviews" color="blue" />
-                <ProgressCircle percentage={0} label="Coding Battles" color="green" />
-                <ProgressCircle percentage={0} label="Technical Skills" color="purple" />
-                <ProgressCircle percentage={0} label="Overall Score" color="orange" />
+                <ProgressCircle count={mockInterviews.completed} total={mockInterviews.total} label="Mock Interviews" color="blue" />
+                <ProgressCircle count={0} total={10} label="Coding Battles" color="green" />
+                <ProgressCircle count={0} total={20} label="Technical Skills" color="purple" />
+                <ProgressCircle count={0} total={100} label="Overall Score" color="orange" />
               </div>
             </div>
 
