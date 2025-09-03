@@ -2,6 +2,7 @@ import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import JobPost from '../models/JobPost.js';
 import { getMySQLPool } from "../config/db.js";
+import mongoose from "mongoose";
 const router = express.Router();
 
 // ================== CREATE JOB POST ==================
@@ -469,4 +470,124 @@ router.delete('/posts/:jobId', authenticateToken, async (req, res) => {
   }
 });
 
+// ================== GET APPLICATIONS FOR RECRUITER'S JOBS ==================
+router.get('/recruiter/applications', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'recruiter') {
+      return res.status(403).json({ message: 'Only recruiters can access this endpoint' });
+    }
+
+    const pool = getMySQLPool();
+    
+    // Get all job posts by this recruiter with their applications
+    const recruiterJobs = await JobPost.find({ 
+      'recruiter.user_id': req.user.id 
+    });
+
+    if (recruiterJobs.length === 0) {
+      return res.json({ applications: [] });
+    }
+
+    // Extract all user IDs from applications across all jobs
+    const userIds = [];
+    const applicationsData = [];
+    
+    recruiterJobs.forEach(job => {
+      job.applications.applied_users.forEach(application => {
+        userIds.push(application.user_id);
+        applicationsData.push({
+          application_id: application._id,
+          user_id: application.user_id,
+          student_name: application.student_name,
+          status: application.status,
+          applied_at: application.applied_at,
+          job_id: job._id,
+          job_title: job.title,
+          job_created_at: job.createdAt
+        });
+      });
+    });
+
+    if (userIds.length === 0) {
+      return res.json({ applications: [] });
+    }
+
+    // Get user details from MySQL
+    const placeholders = userIds.map(() => '?').join(',');
+    const [userRows] = await pool.query(`
+      SELECT 
+        u.id as user_id,
+        u.name,
+        u.email,
+        s.contact,
+        s.college,
+        s.department,
+        s.year_of_study,
+        s.cgpa,
+        s.skills,
+        s.backlogs,
+        s.resume_url,
+        s.dob,
+        s.gender,
+        s.address,
+        s.roll_no,
+        s.marks_10,
+        s.marks_12,
+        s.certifications,
+        s.projects,
+        s.job_roles,
+        s.job_locations,
+        s.placement_status
+      FROM users u
+      LEFT JOIN students s ON u.id = s.user_id
+      WHERE u.id IN (${placeholders})
+    `, userIds);
+
+    // Create a map of user details for easy lookup
+    const userDetailsMap = {};
+    userRows.forEach(user => {
+      userDetailsMap[user.user_id] = user;
+    });
+
+    // Combine application data with user details
+    const applications = applicationsData.map(app => {
+      const userDetails = userDetailsMap[app.user_id] || {};
+      
+      return {
+        application_id: app.application_id,
+        student_name: app.student_name,
+        user_id: app.user_id,
+        status: app.status,
+        applied_at: app.applied_at,
+        job_title: app.job_title,
+        job_created_at: app.job_created_at,
+        email: userDetails.email,
+        contact: userDetails.contact,
+        college: userDetails.college,
+        department: userDetails.department,
+        year_of_study: userDetails.year_of_study,
+        cgpa: userDetails.cgpa,
+        skills: userDetails.skills,
+        backlogs: userDetails.backlogs,
+        resume_url: userDetails.resume_url,
+        dob: userDetails.dob,
+        gender: userDetails.gender,
+        address: userDetails.address,
+        roll_no: userDetails.roll_no,
+        marks_10: userDetails.marks_10,
+        marks_12: userDetails.marks_12,
+        certifications: userDetails.certifications,
+        projects: userDetails.projects,
+        job_roles: userDetails.job_roles,
+        job_locations: userDetails.job_locations,
+        placement_status: userDetails.placement_status
+      };
+    });
+
+    res.json({ applications });
+  } catch (error) {
+    console.error('Error fetching applications:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 export default router;
