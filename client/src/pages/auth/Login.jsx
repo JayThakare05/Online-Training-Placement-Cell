@@ -59,7 +59,14 @@ export default function Login() {
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-100 p-4">
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h2 className="text-3xl font-bold mb-6 text-center text-gray-800">Login</h2>
+        {/* Added "CareerConnect" and logo */}
+        <div className="text-center mb-6">
+          <img 
+            src="/logo.jpg" // The updated path
+            alt="CareerConnect Logo" 
+            className="h-25 w-30 mx-auto rounded-lg"
+          />
+        </div>
         
         {/* Error Message */}
         {error && (
