@@ -3,7 +3,7 @@ import DashboardLayout from "../../components/DashboardLayout";
 
 export default function Messages() {
   const [messages, setMessages] = useState([
-    { sender: "Jay Thakare", text: "Hello, I applied for the React Developer role." },
+    { sender: "Keval Thakare", text: "Hello, I applied for the React Developer role." },
     { sender: "Recruiter", text: "Thanks Jay, we’ll get back to you soon." }
   ]);
   const [newMessage, setNewMessage] = useState("");
