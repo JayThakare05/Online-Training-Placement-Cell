@@ -1,12 +1,31 @@
 import express from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
 import Attempt from '../models/Attempt.js';
 
 const router = express.Router();
 dotenv.config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// Middleware to verify JWT token and extract user ID
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token is required' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+    req.userId = decoded.userId || decoded.id; // Adjust based on your JWT payload structure
+    next();
+  });
+};
 
 // Existing /generate-questions route remains unchanged
 router.post('/generate-questions', async (req, res) => {
@@ -38,10 +57,11 @@ router.post('/generate-questions', async (req, res) => {
   }
 });
 
-// New route for submitting answers, scoring, and saving to MongoDB
-router.post('/submit-answers', async (req, res) => {
+// Updated route for submitting answers with user authentication
+router.post('/submit-answers', authenticateToken, async (req, res) => {
   try {
     const { type, difficulty, questions, answers } = req.body;
+    const userId = req.userId; // Get user ID from JWT token
 
     if (!type || !difficulty || !questions || !answers) {
       return res.status(400).json({ error: 'Missing required data.' });
@@ -73,8 +93,9 @@ router.post('/submit-answers', async (req, res) => {
     let text = result.response.text().replace(/```json|```/g, '').trim();
     const evaluation = JSON.parse(text);
 
-    // Save the attempt to the database
+    // Save the attempt to the database with userId
     const newAttempt = new Attempt({
+      userId, // Include userId from JWT token
       type,
       difficulty,
       questions,
@@ -96,10 +117,13 @@ router.post('/submit-answers', async (req, res) => {
   }
 });
 
-// NEW ROUTE to fetch all past interview attempts
-router.get('/history', async (req, res) => {
+// Updated route to fetch user-specific interview attempts
+router.get('/history', authenticateToken, async (req, res) => {
   try {
-    const attempts = await Attempt.find().sort({ timestamp: -1 });
+    const userId = req.userId; // Get user ID from JWT token
+    
+    // Fetch only attempts for the authenticated user
+    const attempts = await Attempt.find({ userId }).sort({ timestamp: -1 });
     res.json({ attempts });
   } catch (error) {
     console.error('Error fetching interview history:', error);

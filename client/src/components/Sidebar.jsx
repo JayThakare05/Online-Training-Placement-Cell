@@ -16,14 +16,12 @@ const navigationConfig = {
     { name: 'Verify Recruiters', path: '/admin/verify', icon: UserCheck },
     // { name: 'Monitor Data', path: '/admin/monitor', icon: BarChart },
     { name: 'Reports', path: '/admin/reports', icon: FileText },
-    { name: 'Settings', path: '/admin/settings', icon: Settings },
     { name: 'Upload Coding Questions', path: '/admin/coding-questions', icon: Code2}
   ],
   recruiter: [
     { name: 'Dashboard', path: '/recruiter/dashboard', icon: Home },
     { name: 'Post Jobs', path: '/recruiter/post-job', icon: Briefcase },
-    { name: 'Search Candidates', path: '/recruiter/search', icon: Search },
-    { name: 'Shortlisted', path: '/recruiter/shortlisted', icon: Users },
+    { name: 'Applied Candidates', path: '/recruiter/search', icon: Search },
     { name: 'Job Fair', path: '/recruiter/jobfair', icon: Calendar },
     { name: 'Messages', path: '/recruiter/messages', icon: MessageSquare }
   ],

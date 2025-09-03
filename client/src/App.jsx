@@ -26,7 +26,6 @@ import UploadCodingQuestions from './features/admin/UploadCodingQuestions';
 import PostJob from "./features/recruiter/PostJob";
 import SearchCandidates from './features/recruiter/SearchCandidates';
 import JobFair from './features/recruiter/JobFair';
-import Shortlisted from './features/recruiter/Shortlisted';
 import Messages from './features/recruiter/Messages';
 
 import CodingBattle from './features/student/CodingBattle';
@@ -164,13 +163,6 @@ function App() {
             element={
               <ProtectedRoute allowedRole="recruiter">
                 <SearchCandidates/>
-              </ProtectedRoute>
-            } 
-          /><Route 
-            path="/recruiter/shortlisted" 
-            element={
-              <ProtectedRoute allowedRole="recruiter">
-                <Shortlisted/>
               </ProtectedRoute>
             } 
           /><Route 

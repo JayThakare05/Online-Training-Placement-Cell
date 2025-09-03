@@ -258,5 +258,86 @@ router.get("/user-solutions/:userId/:questionId", async (req, res) => {
   }
 });
 
+router.get("/solved-count/:userId", async (req, res) => {
+  const { userId } = req.params;
 
+  try {
+    // Convert userId to number if it's stored as a number in the database
+    const userIdNum = parseInt(userId);
+    
+    // Get distinct questionIds where user has correct solutions
+    const solvedProblems = await Solution.aggregate([
+      {
+        $match: {
+          userId: userIdNum, // Use the converted number
+          isCorrect: true
+        }
+      },
+      {
+        $group: {
+          _id: "$questionId"
+        }
+      },
+      {
+        $count: "totalSolved"
+      }
+    ]);
+
+    const count = solvedProblems.length > 0 ? solvedProblems[0].totalSolved : 0;
+
+    res.json({
+      userId: userId,
+      solvedProblemsCount: count
+    });
+
+  } catch (error) {
+    console.error("Get solved count error:", error);
+    res.status(500).json({ error: "Failed to fetch solved problems count" });
+  }
+});
+
+// Add this to your backend router (compiler.js)
+
+// NEW: Get user's coding activity timeline
+router.get("/coding-activity/:userId", async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    // Convert userId to number if it's stored as a number in the database
+    const userIdNum = parseInt(userId);
+    
+    // Get all correct solutions with their submission dates
+    const solutions = await Solution.find({
+      userId: userIdNum,
+      isCorrect: true
+    }).sort({ submittedAt: 1 });
+
+    // Format the data for the contribution graph
+    const activityData = {};
+    
+    solutions.forEach(solution => {
+      const date = new Date(solution.submittedAt);
+      const year = date.getFullYear();
+      const month = date.getMonth(); // 0-11
+      const day = date.getDate();
+      
+      const key = `${year}-${month}-${day}`;
+      
+      if (!activityData[key]) {
+        activityData[key] = 0;
+      }
+      activityData[key]++;
+    });
+
+    res.json({
+      userId: userId,
+      activity: activityData,
+      totalSolutions: solutions.length
+    });
+
+  } catch (error) {
+    console.error("Get coding activity error:", error);
+    res.status(500).json({ error: "Failed to fetch coding activity" });
+  }
+});
 export default router;

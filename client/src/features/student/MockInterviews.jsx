@@ -10,31 +10,58 @@ export default function MockInterviews() {
   const [history, setHistory] = useState([]);
   const [viewHistory, setViewHistory] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false); // NEW STATE for loading history
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [evaluation, setEvaluation] = useState(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+  const [token, setToken] = useState(null);
+  const [error, setError] = useState(null);
 
-  // NEW useEffect hook to fetch history on component mount
   useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    if (!storedToken) {
+      setError('Please log in to access mock interviews.');
+      return;
+    }
+    setToken(storedToken);
+
     const fetchHistory = async () => {
       setHistoryLoading(true);
       try {
-        const response = await fetch('http://localhost:5000/api/mockInterview/history');
+        const response = await fetch('http://localhost:5000/api/mockInterview/history', {
+          headers: {
+            'Authorization': `Bearer ${storedToken}`
+          }
+        });
+
+        if (response.status === 401) {
+          setError('Session expired. Please log in again.');
+          localStorage.removeItem('token');
+          return;
+        }
+
         if (!response.ok) {
           throw new Error('Failed to fetch history');
         }
+        
         const data = await response.json();
         setHistory(data.attempts);
       } catch (error) {
         console.error('Error fetching history:', error);
+        setError('Failed to load interview history.');
       } finally {
         setHistoryLoading(false);
       }
     };
+    
     fetchHistory();
-  }, []); // Empty dependency array ensures this runs only once
+  }, []);
 
   const startInterview = async (type, level) => {
+    if (!token) {
+      setError('Authentication required. Please log in.');
+      return;
+    }
+
     setLoading(true);
     setSelectedType(type);
     setDifficulty(level);
@@ -43,6 +70,7 @@ export default function MockInterviews() {
     setViewHistory(false);
     setEvaluation(null);
     setSelectedHistoryItem(null);
+    setError(null);
 
     try {
       const response = await fetch('http://localhost:5000/api/mockInterview/generate-questions', {
@@ -61,6 +89,7 @@ export default function MockInterviews() {
       setQuestions(data.questions);
     } catch (error) {
       console.error('Error:', error);
+      setError('Failed to generate questions. Please try again.');
       setSelectedType(null);
       setDifficulty(null);
     } finally {
@@ -73,7 +102,14 @@ export default function MockInterviews() {
   };
 
   const handleSubmit = async () => {
+    if (!token) {
+      setError('Authentication required. Please log in.');
+      return;
+    }
+    
     setLoading(true);
+    setError(null);
+    
     try {
       const answersArray = questions.map((_, i) => answers[i] || "");
 
@@ -81,6 +117,7 @@ export default function MockInterviews() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           type: selectedType,
@@ -89,6 +126,12 @@ export default function MockInterviews() {
           answers: answersArray,
         }),
       });
+
+      if (response.status === 401) {
+        setError('Session expired. Please log in again.');
+        localStorage.removeItem('token');
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('Failed to submit answers for evaluation.');
@@ -101,16 +144,38 @@ export default function MockInterviews() {
       });
 
       // After a successful submission, re-fetch the history to get the latest attempt
-      const newHistoryResponse = await fetch('http://localhost:5000/api/mockInterview/history');
-      const newHistoryData = await newHistoryResponse.json();
-      setHistory(newHistoryData.attempts);
+      const newHistoryResponse = await fetch('http://localhost:5000/api/mockInterview/history', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (newHistoryResponse.ok) {
+        const newHistoryData = await newHistoryResponse.json();
+        setHistory(newHistoryData.attempts);
+      }
 
     } catch (error) {
       console.error('Error:', error);
+      setError('Failed to submit answers. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Show error message if authentication fails
+  if (error && !token) {
+    return (
+      <DashboardLayout>
+        <div className="bg-gray-50 min-h-screen py-12 flex items-center justify-center">
+          <div className="max-w-md mx-auto bg-white shadow-md border border-red-200 rounded-2xl p-8 text-center">
+            <div className="text-red-600 text-xl font-semibold mb-4">Authentication Required</div>
+            <p className="text-gray-600">{error}</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -133,6 +198,7 @@ export default function MockInterviews() {
                 setAnswers({});
                 setEvaluation(null);
                 setSelectedHistoryItem(null);
+                setError(null);
               }}
               className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-lg hover:bg-gray-200 transition"
             >
@@ -140,6 +206,13 @@ export default function MockInterviews() {
               {viewHistory ? "Back" : "View History"}
             </button>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
 
           {/* History Section - List View */}
           {viewHistory && !selectedHistoryItem && (
@@ -161,6 +234,7 @@ export default function MockInterviews() {
                           {h.type} Interview ({h.difficulty})
                         </p>
                         <p className="text-gray-600 text-sm">{new Date(h.timestamp).toLocaleString()}</p>
+                        <p className="text-sm text-green-600">Score: {h.score}/50</p>
                       </div>
                       <button
                         onClick={() => setSelectedHistoryItem(h)}
@@ -279,7 +353,9 @@ export default function MockInterviews() {
           {/* Loading state */}
           {loading && (
             <div className="text-center p-8">
-              <p className="text-xl font-semibold text-gray-700">Generating questions... 🧠</p>
+              <p className="text-xl font-semibold text-gray-700">
+                {evaluation ? "Evaluating your answers..." : "Generating questions..."} 🧠
+              </p>
               <p className="text-gray-500 mt-2">Please wait a moment.</p>
             </div>
           )}
@@ -312,7 +388,8 @@ export default function MockInterviews() {
               <div className="flex gap-4">
                 <button
                   onClick={handleSubmit}
-                  className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition"
+                  disabled={loading}
+                  className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Submit Answers
                 </button>
@@ -322,6 +399,7 @@ export default function MockInterviews() {
                     setDifficulty(null);
                     setQuestions([]);
                     setAnswers({});
+                    setError(null);
                   }}
                   className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition"
                 >
@@ -356,6 +434,7 @@ export default function MockInterviews() {
                     setDifficulty(null);
                     setQuestions([]);
                     setAnswers({});
+                    setError(null);
                   }}
                   className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition"
                 >
