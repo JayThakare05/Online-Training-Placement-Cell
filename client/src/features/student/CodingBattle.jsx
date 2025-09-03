@@ -2,11 +2,8 @@ import React, { useMemo, useState, useRef, useEffect } from "react";
 import Editor from "@monaco-editor/react";
 import DashboardLayout from "../../components/DashboardLayout";
 
-/* --------------------  sounds  -------------------- */
-// tiny beep (base64 wav)
 const beep = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=");
 
-/* -------------------- snippets -------------------- */
 const starterSnippets = {
   c: `#include <stdio.h>
 int main() {
@@ -32,41 +29,6 @@ class Main {
   javascript: `console.log("Hello, JavaScript!");`
 };
 
-/* -------------------- problem data -------------------- */
-const problemData = {
-  id: 101,
-  title: "Two Sum",
-  difficulty: "Easy",
-  description: `Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
-
-You may assume that each input would have exactly one solution, and you may not use the same element twice.
-
-You can return the answer in any order.`,
-  examples: [
-    {
-      input: "nums = [2,7,11,15], target = 9",
-      output: "[0,1]",
-      explanation: "Because nums[0] + nums[1] == 9, we return [0, 1]."
-    },
-    {
-      input: "nums = [3,2,4], target = 6",
-      output: "[1,2]",
-      explanation: "Because nums[1] + nums[2] == 6, we return [1, 2]."
-    },
-    {
-      input: "nums = [3,3], target = 6",
-      output: "[0,1]"
-    }
-  ],
-  constraints: [
-    "2 <= nums.length <= 10^4",
-    "-10^9 <= nums[i] <= 10^9",
-    "-10^9 <= target <= 10^9",
-    "Only one valid answer exists."
-  ]
-};
-
-/* -------------------- icons -------------------- */
 const ClockIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -79,7 +41,6 @@ const WarningIcon = () => (
   </svg>
 );
 
-/* -------------------- Result Component -------------------- */
 const ResultsScreen = ({ 
   score, 
   tabSwitches, 
@@ -117,7 +78,6 @@ const ResultsScreen = ({
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-xl">
           <div className="text-center">
             <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -130,14 +90,11 @@ const ResultsScreen = ({
           </div>
         </div>
 
-        {/* Content */}
         <div className="p-6">
-          {/* Submission Type */}
           <div className="text-center mb-6">
             {getSubmissionBadge()}
           </div>
 
-          {/* Score Section */}
           <div className="text-center mb-8">
             <div className="mb-4">
               <div className={`text-6xl font-bold ${getScoreColor()} mb-2`}>
@@ -147,9 +104,7 @@ const ResultsScreen = ({
             </div>
           </div>
 
-          {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            {/* Time Taken */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
               <div className="flex items-center justify-center mb-2">
                 <ClockIcon />
@@ -163,7 +118,6 @@ const ResultsScreen = ({
               </div>
             </div>
 
-            {/* Tab Switches */}
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
               <div className="flex items-center justify-center mb-2">
                 <svg className="w-4 h-4 mr-1 text-yellow-700" fill="currentColor" viewBox="0 0 20 20">
@@ -179,7 +133,6 @@ const ResultsScreen = ({
               </div>
             </div>
 
-            {/* Security Score */}
             <div className={`${tabSwitches === 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border rounded-lg p-4 text-center`}>
               <div className="flex items-center justify-center mb-2">
                 <svg className={`w-4 h-4 mr-1 ${tabSwitches === 0 ? 'text-green-700' : 'text-red-700'}`} fill="currentColor" viewBox="0 0 20 20">
@@ -196,7 +149,6 @@ const ResultsScreen = ({
             </div>
           </div>
 
-          {/* Cheating Events */}
           {cheatingEvents.length > 0 && (
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-red-700 mb-3 flex items-center">
@@ -216,7 +168,6 @@ const ResultsScreen = ({
             </div>
           )}
 
-          {/* Performance Analysis */}
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Performance Analysis</h3>
             <div className="space-y-3">
@@ -239,7 +190,6 @@ const ResultsScreen = ({
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex gap-3 justify-center">
             <button
               onClick={onRestart}
@@ -257,7 +207,6 @@ const ResultsScreen = ({
   );
 };
 
-/* -------------------- main component -------------------- */
 export default function CodeRunner() {
   const [language, setLanguage] = useState("cpp");
   const [code, setCode] = useState(starterSnippets["cpp"]);
@@ -268,12 +217,10 @@ export default function CodeRunner() {
   const [fontSize, setFontSize] = useState(14);
   const [showProblem, setShowProblem] = useState(true);
 
-  // timer
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
+  const [timeLeft, setTimeLeft] = useState(300);
   const [startTime] = useState(Date.now());
   const totalTimeInSeconds = 300;
 
-  // anti-cheat
   const [tabSwitches, setTabSwitches] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [warned, setWarned] = useState(false);
@@ -285,6 +232,10 @@ export default function CodeRunner() {
   const [attentionWarningTime, setAttentionWarningTime] = useState(null);
   const [unfocusedStartTime, setUnfocusedStartTime] = useState(null);
 
+  const [problemData, setProblemData] = useState(null);
+  const [questionLoading, setQuestionLoading] = useState(true);
+  const [questionError, setQuestionError] = useState(null);
+
   const editorRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -293,34 +244,82 @@ export default function CodeRunner() {
     return map[language];
   }, [language]);
 
-  // Add cheating event
+  useEffect(() => {
+    fetchRandomQuestion();
+  }, []);
+
+  const fetchRandomQuestion = async () => {
+    setQuestionLoading(true);
+    setQuestionError(null);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/questions/random', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setProblemData(data);
+    } catch (error) {
+      console.error('Error fetching question:', error);
+      setQuestionError('Failed to load question. Please try again.');
+      setProblemData({
+        _id: "fallback",
+        questionNumber: 101,
+        questionName: "Two Sum",
+        difficulty: "Easy",
+        description: `Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
+
+You may assume that each input would have exactly one solution, and you may not use the same element twice.
+
+You can return the answer in any order.`,
+        examples: [
+          {
+            input: "nums = [2,7,11,15], target = 9",
+            output: "[0,1]",
+            explanation: "Because nums[0] + nums[1] == 9, we return [0, 1]."
+          },
+          {
+            input: "nums = [3,2,4], target = 6",
+            output: "[1,2]",
+            explanation: "Because nums[1] + nums[2] == 6, we return [1, 2]."
+          },
+          {
+            input: "nums = [3,3], target = 6",
+            output: "[0,1]"
+          }
+        ],
+        constraints: "2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9\n-10^9 <= target <= 10^9\nOnly one valid answer exists."
+      });
+    } finally {
+      setQuestionLoading(false);
+    }
+  };
+
   const addCheatingEvent = (type) => {
     setCheatingEvents(prev => [...prev, { type, timestamp: Date.now() }]);
   };
 
-  // Calculate final score
   const calculateScore = () => {
     let score = 100;
-    
-    // Deduct points for tab switches
     score -= tabSwitches * 10;
-    
-    // Calculate actual time taken (not elapsed time)
     const actualTimeTaken = totalTimeInSeconds - timeLeft;
-    
-    // Deduct points for time (if took too long relative to total time)
     const timePercentage = actualTimeTaken / totalTimeInSeconds;
-    if (timePercentage > 0.8) { // More than 80% of allocated time
+    if (timePercentage > 0.8) {
       score -= 10;
     }
-    
-    // Deduct points for other cheating attempts
     score -= cheatingEvents.length * 5;
-    
     return Math.max(0, score);
   };
 
-  // Auto-submit when attention warning timeout
   useEffect(() => {
     if (!windowFocused && !submitted && attentionWarningTime) {
       const timer = setTimeout(() => {
@@ -328,21 +327,18 @@ export default function CodeRunner() {
         setSubmissionType('cheating');
         setShowResults(true);
         addCheatingEvent('Auto-submitted due to prolonged inactivity');
-      }, 5000); // 5 seconds timeout
+      }, 5000);
 
       return () => clearTimeout(timer);
     }
   }, [attentionWarningTime, windowFocused, submitted]);
 
-  /* ---------- Enhanced Anti-Cheat System ---------- */
   useEffect(() => {
     let blurCount = 0;
     let mouseLeaveCount = 0;
     let keydownViolations = 0;
 
-    // Prevent window manipulation
     const preventWindowManipulation = (e) => {
-      // Block minimize/maximize/resize attempts via keyboard
       if (e.altKey && (e.key === 'F4' || e.key === 'Tab')) {
         e.preventDefault();
         addCheatingEvent('Window Manipulation Blocked');
@@ -355,13 +351,10 @@ export default function CodeRunner() {
       }
     };
 
-    // Enhanced window resize detection
     const handleResize = () => {
       if (!submitted) {
-        // If window is resized significantly, it might indicate minimizing/maximizing
         if (window.outerHeight < 600 || window.outerWidth < 1000) {
           addCheatingEvent('Window Manipulation Detected');
-          // Auto-submit if window is minimized (very small dimensions)
           if (window.outerHeight < 100 || window.outerWidth < 100) {
             setSubmitted(true);
             setSubmissionType('cheating');
@@ -371,7 +364,6 @@ export default function CodeRunner() {
       }
     };
 
-    // Track window focus/blur
     const handleFocus = () => {
       setWindowFocused(true);
       setAttentionWarningTime(null);
@@ -403,7 +395,6 @@ export default function CodeRunner() {
       }
     };
 
-    // Track mouse leave (potential split screen)
     const handleMouseLeave = () => {
       if (!submitted && windowFocused) {
         mouseLeaveCount++;
@@ -413,12 +404,9 @@ export default function CodeRunner() {
       }
     };
 
-    // Enhanced keyboard monitoring
     const handleKeyDown = (e) => {
-      // Prevent window manipulation
       preventWindowManipulation(e);
 
-      // Block developer tools
       if (e.key === 'F12' || 
           (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key)) ||
           (e.ctrlKey && e.key === 'U')) {
@@ -433,21 +421,18 @@ export default function CodeRunner() {
         return false;
       }
 
-      // Block copy/paste/select all
       if (e.ctrlKey && ['A', 'C', 'X', 'V'].includes(e.key)) {
         e.preventDefault();
         addCheatingEvent('Copy/Paste Attempt');
         return false;
       }
 
-      // Block Alt+Tab
       if (e.altKey && e.key === 'Tab') {
         e.preventDefault();
         addCheatingEvent('Alt+Tab Blocked');
         return false;
       }
 
-      // Block Windows key
       if (e.key === 'Meta' || e.keyCode === 91) {
         e.preventDefault();
         addCheatingEvent('Windows Key Blocked');
@@ -455,14 +440,12 @@ export default function CodeRunner() {
       }
     };
 
-    // Block right-click
     const handleContextMenu = (e) => {
       e.preventDefault();
       addCheatingEvent('Right-click Attempt');
       return false;
     };
 
-    // Block text selection
     const handleSelectStart = (e) => {
       if (e.target.tagName !== 'TEXTAREA' && !e.target.closest('.monaco-editor')) {
         e.preventDefault();
@@ -470,7 +453,6 @@ export default function CodeRunner() {
       }
     };
 
-    // Detect fullscreen changes (potential screen sharing detection evasion)
     const handleFullscreenChange = () => {
       const isNowFullscreen = document.fullscreenElement !== null;
       setIsFullscreen(isNowFullscreen);
@@ -479,7 +461,6 @@ export default function CodeRunner() {
       }
     };
 
-    // Enhanced visibility change detection
     const handleVisibilityChange = () => {
       if (document.hidden && !submitted) {
         addCheatingEvent('Tab/Window Hidden');
@@ -491,7 +472,6 @@ export default function CodeRunner() {
       }
     };
 
-    // Add all event listeners
     window.addEventListener('focus', handleFocus);
     window.addEventListener('blur', handleBlur);
     document.addEventListener('mouseleave', handleMouseLeave);
@@ -502,7 +482,6 @@ export default function CodeRunner() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('resize', handleResize);
 
-    // Cleanup
     return () => {
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('blur', handleBlur);
@@ -516,7 +495,6 @@ export default function CodeRunner() {
     };
   }, [submitted, windowFocused, tabSwitches, warned]);
 
-  /* ---------- Timer ---------- */
   useEffect(() => {
     if (submitted) return;
     
@@ -534,10 +512,8 @@ export default function CodeRunner() {
   function handleEditorDidMount(editor, monaco) {
     editorRef.current = editor;
     
-    // Disable context menu
     editor.onContextMenu(() => ({ actions: [] }));
     
-    // Block copy/paste shortcuts
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA, () => {});
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {});
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {});
@@ -584,7 +560,6 @@ export default function CodeRunner() {
   };
 
   const handleRestart = () => {
-    // Reset all states
     setLanguage("cpp");
     setCode(starterSnippets["cpp"]);
     setInput("");
@@ -603,6 +578,7 @@ export default function CodeRunner() {
     setShowProblem(true);
     setAttentionWarningTime(null);
     setUnfocusedStartTime(null);
+    fetchRandomQuestion();
   };
 
   const onLangChange = (e) => {
@@ -624,9 +600,8 @@ export default function CodeRunner() {
   
   const clearInput = () => setInput("");
 
-  // Show results screen
   if (showResults) {
-    const actualTimeTaken = totalTimeInSeconds - timeLeft; // This gives us the actual time spent
+    const actualTimeTaken = totalTimeInSeconds - timeLeft;
     return (
       <ResultsScreen
         score={calculateScore()}
@@ -643,16 +618,13 @@ export default function CodeRunner() {
   return (
     <DashboardLayout>
     <div className={`min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 text-gray-800 ${submitted ? 'pointer-events-none opacity-60' : ''}`}>
-      {/* Security Status Bar */}
       {!windowFocused && (
         <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-50 animate-pulse">
           ⚠️ ATTENTION: Please return to the exam window immediately!
         </div>
       )}
 
-      {/* Header - Updated to match layout */}
       <div className={`bg-white border-b border-gray-300 py-3 px-6 flex justify-between items-center shadow-sm ${!windowFocused ? 'mt-10' : ''}`}>
-        {/* Left side - Command section */}
         <div className="flex items-center space-x-6">
           <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-600 font-medium">Language:</span>
@@ -715,7 +687,6 @@ export default function CodeRunner() {
           </div>
         </div>
 
-        {/* Right side - Status indicators */}
         <div className="flex space-x-4 items-center">
           <div className="flex items-center space-x-2">
             <div className={`flex items-center px-3 py-1.5 rounded-md text-sm font-mono border ${
@@ -737,9 +708,7 @@ export default function CodeRunner() {
         </div>
       </div>
 
-      {/* Main Content Layout - Adjusted to match diagram */}
       <div className="flex h-[calc(100vh-75px)]">
-        {/* Problem Statement Panel */}
         <div className="w-1/3 bg-white border-r border-gray-300 overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-gray-300 bg-gray-50">
             <h3 className="text-sm font-semibold text-gray-800 flex items-center">
@@ -750,62 +719,96 @@ export default function CodeRunner() {
             </h3>
           </div>
           <div className="p-4 overflow-y-auto flex-1">
-            <div className="mb-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-800">{problemData.title}</h2>
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                  problemData.difficulty === "Easy" ? "bg-green-100 text-green-800" :
-                  problemData.difficulty === "Medium" ? "bg-yellow-100 text-yellow-800" :
-                  "bg-red-100 text-red-800"
-                }`}>
-                  {problemData.difficulty}
-                </span>
+            {questionLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading question...</p>
+                </div>
               </div>
-              <p className="text-sm text-gray-600 mt-1">Problem ID: #{problemData.id}</p>
-            </div>
-
-            <div className="prose prose-sm max-w-none">
-              <p className="whitespace-pre-line text-gray-700">{problemData.description}</p>
-              
-              <div className="mt-6">
-                <h4 className="font-semibold text-gray-800 flex items-center">
-                  <svg className="w-4 h-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Examples:
-                </h4>
-                {problemData.examples.map((example, index) => (
-                  <div key={index} className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200">
-                    <p className="font-medium text-gray-700">Example {index + 1}:</p>
-                    <p className="mt-1 text-sm font-mono text-blue-600"><span className="font-medium text-gray-600">Input:</span> {example.input}</p>
-                    <p className="mt-1 text-sm font-mono text-green-600"><span className="font-medium text-gray-600">Output:</span> {example.output}</p>
-                    {example.explanation && (
-                      <p className="mt-1 text-sm text-gray-600"><span className="font-medium">Explanation:</span> {example.explanation}</p>
-                    )}
+            ) : questionError ? (
+              <div className="text-center text-red-600">
+                <svg className="w-12 h-12 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <p className="mb-2">{questionError}</p>
+                <button 
+                  onClick={fetchRandomQuestion}
+                  className="bg-blue-500 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-600"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : problemData ? (
+              <>
+                <div className="mb-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-gray-800">{problemData.questionName}</h2>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                      problemData.difficulty === "Easy" ? "bg-green-100 text-green-800" :
+                      problemData.difficulty === "Medium" ? "bg-yellow-100 text-yellow-800" :
+                      "bg-red-100 text-red-800"
+                    }`}>
+                      {problemData.difficulty}
+                    </span>
                   </div>
-                ))}
-              </div>
+                  <p className="text-sm text-gray-600 mt-1">Problem ID: #{problemData.questionNumber}</p>
+                </div>
 
-              <div className="mt-6">
-                <h4 className="font-semibold text-gray-800 flex items-center">
-                  <svg className="w-4 h-4 mr-2 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  Constraints:
-                </h4>
-                <ul className="mt-2 list-disc list-inside text-sm text-gray-700 pl-2">
-                  {problemData.constraints.map((constraint, index) => (
-                    <li key={index} className="py-1 border-b border-gray-100 last:border-b-0">{constraint}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+                <div className="prose prose-sm max-w-none">
+                  <p className="whitespace-pre-line text-gray-700">{problemData.description}</p>
+                  
+                  {problemData.examples && problemData.examples.length > 0 && (
+                    <div className="mt-6">
+                      <h4 className="font-semibold text-gray-800 flex items-center">
+                        <svg className="w-4 h-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Examples:
+                      </h4>
+                      {problemData.examples.map((example, index) => (
+                        <div key={index} className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200">
+                          <p className="font-medium text-gray-700">Example {index + 1}:</p>
+                          {example.input && (
+                            <p className="mt-1 text-sm font-mono text-blue-600">
+                              <span className="font-medium text-gray-600">Input:</span> {typeof example.input === 'string' ? example.input : JSON.stringify(example.input)}
+                            </p>
+                          )}
+                          {example.output && (
+                            <p className="mt-1 text-sm font-mono text-green-600">
+                              <span className="font-medium text-gray-600">Output:</span> {typeof example.output === 'string' ? example.output : JSON.stringify(example.output)}
+                            </p>
+                          )}
+                          {example.explanation && (
+                            <p className="mt-1 text-sm text-gray-600">
+                              <span className="font-medium">Explanation:</span> {example.explanation}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {problemData.constraints && (
+                    <div className="mt-6">
+                      <h4 className="font-semibold text-gray-800 flex items-center">
+                        <svg className="w-4 h-4 mr-2 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Constraints:
+                      </h4>
+                      <div className="mt-2 text-sm text-gray-700 pl-2 whitespace-pre-line">
+                        {problemData.constraints}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
 
-        {/* Code Editor and Input/Output Panel */}
         <div className="w-2/3 flex flex-col">
-          {/* Code Editor Panel */}
           <div className="flex-1 bg-white border-b border-gray-300 overflow-hidden flex flex-col">
             <div className="px-4 py-3 border-b border-gray-300 bg-gray-50 flex justify-between items-center">
               <div className="flex items-center gap-3">
@@ -869,9 +872,7 @@ export default function CodeRunner() {
             </div>
           </div>
 
-          {/* Input/Output Section */}
           <div className="h-1/3 flex">
-            {/* Input Panel */}
             <div className="w-1/2 bg-white border-r border-gray-300 overflow-hidden flex flex-col">
               <div className="px-4 py-3 border-b border-gray-300 bg-gray-50 flex justify-between items-center">
                 <h3 className="text-sm font-semibold text-gray-800 flex items-center">
@@ -899,7 +900,6 @@ export default function CodeRunner() {
               />
             </div>
 
-            {/* Output Panel */}
             <div className="w-1/2 bg-white overflow-hidden flex flex-col">
               <div className="px-4 py-3 border-b border-gray-300 bg-gray-50 flex justify-between items-center">
                 <div className="flex items-center gap-2">
@@ -950,7 +950,6 @@ export default function CodeRunner() {
         </div>
       </div>
 
-      {/* Footer Status Bar */}
       <div className="bg-white border-t border-gray-300 px-6 py-2">
         <div className="flex justify-center items-center text-xs text-gray-600">
           <div className="flex items-center gap-6">

@@ -14,7 +14,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import resumeRoutes from './routes/resume.js';
 import questionRoutes from './routes/questions.js';
-
+import mockInterviewRouter from './routes/mockInterviews.js'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -38,7 +38,7 @@ app.use("/api/content", contentRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/resume", resumeRoutes); 
 app.use("/api/questions", questionRoutes);
-
+app.use('/api/mockInterview', mockInterviewRouter);
 // Test Route
 app.get("/", (req, res) => {
   res.send("Backend API is running 🚀");

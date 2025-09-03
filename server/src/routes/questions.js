@@ -3,7 +3,8 @@ import { authenticateToken } from "../middleware/auth.js";
 import CodingQuestion from "../models/uploadQuestions.js";
 import multer from "multer";
 import XLSX from 'xlsx';
-
+// Add this import at the top of your router file
+import mongoose from "mongoose";
 const storage = multer.memoryStorage();
 const router = express.Router();
 
@@ -318,6 +319,67 @@ router.get("/", authenticateToken, async (req, res) => {
             error: error.message
         });
     }
+});
+
+router.get("/random", authenticateToken, async (req, res) => {
+  try {
+    // Remove the admin check or modify it based on your requirements
+    const { difficulty } = req.query;
+    
+    let filter = {};
+    if (difficulty && ['Easy', 'Medium', 'Hard'].includes(difficulty)) {
+      filter.difficulty = difficulty;
+    }
+    
+    const count = await CodingQuestion.countDocuments(filter);
+    
+    if (count === 0) {
+      return res.status(404).json({ message: 'No questions found' });
+    }
+    
+    const randomIndex = Math.floor(Math.random() * count);
+    const randomQuestion = await CodingQuestion.findOne(filter).skip(randomIndex);
+    
+    if (!randomQuestion) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+    
+    res.status(200).json(randomQuestion);
+  } catch (error) {
+    console.error('Error fetching random question:', error);
+    res.status(500).json({
+      message: 'Failed to fetch random question',
+      error: error.message
+    });
+  }
+});
+
+router.get("/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    let question;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      question = await CodingQuestion.findById(id);
+    } else {
+      const questionNumber = parseInt(id);
+      if (!isNaN(questionNumber)) {
+        question = await CodingQuestion.findOne({ questionNumber });
+      }
+    }
+    
+    if (!question) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+    
+    res.status(200).json(question);
+  } catch (error) {
+    console.error('Error fetching question:', error);
+    res.status(500).json({
+      message: 'Failed to fetch question',
+      error: error.message
+    });
+  }
 });
 
 export default router;
