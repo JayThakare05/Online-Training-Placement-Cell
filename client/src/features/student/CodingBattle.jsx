@@ -216,7 +216,6 @@ export default function CodeRunner() {
   const [executionTime, setExecutionTime] = useState("");
   const [fontSize, setFontSize] = useState(14);
   const [showProblem, setShowProblem] = useState(true);
-
   const [timeLeft, setTimeLeft] = useState(300);
   const [startTime] = useState(Date.now());
   const totalTimeInSeconds = 300;
@@ -238,7 +237,60 @@ export default function CodeRunner() {
 
   const editorRef = useRef(null);
   const textareaRef = useRef(null);
+  const [userId, setUserId] = useState(localStorage.getItem('userId') || '');
+  const [solutionStatus, setSolutionStatus] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [userSolutions, setUserSolutions] = useState([]);
+  useEffect(() => {
+  // Get user ID from localStorage or context
+  const storedUserId = localStorage.getItem('userId');
+  if (storedUserId) {
+    setUserId(storedUserId);
+  }
+}, []);
 
+useEffect(() => {
+  if (userId && problemData?._id) {
+    checkSolutionStatus();
+    fetchUserSolutions();
+  }
+}, [userId, problemData]);
+
+const checkSolutionStatus = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(
+      `http://localhost:5000/api/compiler/check-solution/${userId}/${problemData._id}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      }
+    );
+    const data = await response.json();
+    setSolutionStatus(data);
+  } catch (error) {
+    console.error('Error checking solution status:', error);
+  }
+};
+
+const fetchUserSolutions = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(
+      `http://localhost:5000/api/compiler/user-solutions/${userId}/${problemData._id}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      }
+    );
+    const data = await response.json();
+    setUserSolutions(data.solutions || []);
+  } catch (error) {
+    console.error('Error fetching user solutions:', error);
+  }
+};
   const monacoLang = useMemo(() => {
     const map = { c: "c", cpp: "cpp", java: "java", python: "python", javascript: "javascript" };
     return map[language];
@@ -545,19 +597,60 @@ You can return the answer in any order.`,
     }
   };
 
-  const handleSubmit = () => {
-    if (submitted) return;
+const handleSubmit = async () => {
+  if (submitted) return;
+  
+  if (!output || output.includes("No output") || output.includes("Error:")) {
+    alert("Please run your code successfully first to generate valid output before submitting.");
+    return;
+  }
+
+  const confirmSubmit = window.confirm(
+    "Are you sure you want to submit your solution? This action cannot be undone."
+  );
+  
+  if (confirmSubmit) {
+    setSubmitting(true);
     
-    const confirmSubmit = window.confirm(
-      "Are you sure you want to submit your solution? This action cannot be undone."
-    );
-    
-    if (confirmSubmit) {
-      setSubmitted(true);
-      setSubmissionType('manual');
-      setShowResults(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch("http://localhost:5000/api/compiler/submit-solution", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          language,
+          code,
+          output,
+          questionId: problemData._id,
+          userId
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setSubmitted(true);
+        setSubmissionType('manual');
+        setShowResults(true);
+        // Update the score based on evaluation
+        setScore(result.evaluation.score);
+        // Refresh solution status
+        checkSolutionStatus();
+        fetchUserSolutions();
+      } else {
+        alert("Submission failed: " + (result.error || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Submission error:", error);
+      alert("Submission failed. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
-  };
+  }
+};
 
   const handleRestart = () => {
     setLanguage("cpp");
