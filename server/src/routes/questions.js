@@ -323,34 +323,34 @@ router.get("/", authenticateToken, async (req, res) => {
 
 router.get("/random", authenticateToken, async (req, res) => {
   try {
-    // Remove the admin check or modify it based on your requirements
     const { difficulty } = req.query;
-    
-    let filter = {};
-    if (difficulty && ['Easy', 'Medium', 'Hard'].includes(difficulty)) {
-      filter.difficulty = difficulty;
-    }
-    
+    const filter = difficulty ? { difficulty } : {};
+
     const count = await CodingQuestion.countDocuments(filter);
-    
-    if (count === 0) {
-      return res.status(404).json({ message: 'No questions found' });
-    }
-    
-    const randomIndex = Math.floor(Math.random() * count);
-    const randomQuestion = await CodingQuestion.findOne(filter).skip(randomIndex);
-    
-    if (!randomQuestion) {
-      return res.status(404).json({ message: 'Question not found' });
-    }
-    
-    res.status(200).json(randomQuestion);
-  } catch (error) {
-    console.error('Error fetching random question:', error);
-    res.status(500).json({
-      message: 'Failed to fetch random question',
-      error: error.message
-    });
+    if (!count) return res.status(404).json({ message: 'No questions found' });
+
+    const question = await CodingQuestion
+                    .findOne(filter)
+                    .select('_id questionNumber questionName difficulty description examples constraints')
+                    .lean()
+                    .skip(Math.floor(Math.random() * count));
+
+    if (!question) return res.status(404).json({ message: 'Question not found' });
+
+    /* --------  sanitise HERE  -------- */
+    question.examples = (question.examples || [])
+      .filter(ex => ex && typeof ex === 'object')          // remove nulls / primitives
+      .map(ex => ({
+        input:    ex.input    ?? '',
+        output:   ex.output   ?? '',
+        explanation: ex.explanation ?? ''
+      }));
+    /* --------------------------------- */
+
+    res.status(200).json(question);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch random question', error: err.message });
   }
 });
 
