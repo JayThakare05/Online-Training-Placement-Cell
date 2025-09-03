@@ -28,9 +28,10 @@ export default function Login() {
       const data = await res.json();
 
       if (res.ok) {
-        // Store JWT and role
+        // Store JWT, role, and now the userId
         localStorage.setItem("token", data.token);
         localStorage.setItem("role", data.role);
+        localStorage.setItem("userId", data.id); // <-- This is the added line
 
         // Show success message
         setError("");

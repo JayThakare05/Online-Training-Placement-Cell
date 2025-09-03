@@ -24,6 +24,10 @@ import ManageStudents from './features/admin/ManageStudents';
 import UploadCodingQuestions from './features/admin/UploadCodingQuestions';
 
 import PostJob from "./features/recruiter/PostJob";
+import SearchCandidates from './features/recruiter/SearchCandidates';
+import JobFair from './features/recruiter/JobFair';
+import Shortlisted from './features/recruiter/Shortlisted';
+import Messages from './features/recruiter/Messages';
 
 import CodingBattle from './features/student/CodingBattle';
 import JobApplications from './features/student/JobApplications';
@@ -148,7 +152,35 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          
+          <Route 
+            path="/recruiter/jobfair" 
+            element={
+              <ProtectedRoute allowedRole="recruiter">
+                <JobFair/>
+              </ProtectedRoute>
+            } 
+          /><Route 
+            path="/recruiter/search" 
+            element={
+              <ProtectedRoute allowedRole="recruiter">
+                <SearchCandidates/>
+              </ProtectedRoute>
+            } 
+          /><Route 
+            path="/recruiter/shortlisted" 
+            element={
+              <ProtectedRoute allowedRole="recruiter">
+                <Shortlisted/>
+              </ProtectedRoute>
+            } 
+          /><Route 
+            path="/recruiter/messages" 
+            element={
+              <ProtectedRoute allowedRole="recruiter">
+                <Messages/>
+              </ProtectedRoute>
+            } 
+          />
           {/* Student Routes */}
           <Route 
             path="/student/dashboard" 
