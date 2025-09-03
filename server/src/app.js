@@ -13,7 +13,7 @@ import './models/Content.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import resumeRoutes from './routes/resume.js';
-
+import mockInterviewRouter from './routes/mockInterview.js'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -36,7 +36,7 @@ app.use("/api/jobs", jobRoutes);           // Job routes under /api/jobs/...
 app.use("/api/content", contentRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/resume", resumeRoutes); 
-
+app.use('/api/mockInterview', mockInterviewRouter); 
 // Test Route
 app.get("/", (req, res) => {
   res.send("Backend API is running 🚀");
