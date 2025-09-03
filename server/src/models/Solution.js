@@ -1,11 +1,10 @@
 import mongoose from 'mongoose';
 
 const SolutionSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
+userId: {
+  type: Number, // Use Number to match your MySQL IDs
+  required: true
+},
   questionId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'CodingQuestion',

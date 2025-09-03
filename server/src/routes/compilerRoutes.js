@@ -1,13 +1,14 @@
 import express from "express";
 import axios from "axios";
-// Add to your imports
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import Question from "../models/uploadQuestions.js"; // Assuming you have a Question model
-import Solution from "../models/Solution.js"; // You'll need to create this
+import Question from "../models/uploadQuestions.js";
+import Solution from "../models/Solution.js";
+import mongoose from "mongoose"; // Mongoose import is needed for ObjectId in `submit-solution` route
 
 const router = express.Router();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+const LANG_MAP = { c: 50, cpp: 54, java: 62, javascript: 63, python: 71 };
 
 // Existing run endpoint
 router.post("/run", async (req, res) => {
@@ -68,8 +69,8 @@ router.post("/submit-solution", async (req, res) => {
   }
 
   try {
-    // Get question details using your CodingQuestion model
-    const question = await CodingQuestion.findById(questionId);
+    // FIX 1: Changed CodingQuestion to Question
+    const question = await Question.findById(questionId);
     if (!question) {
       return res.status(404).json({ error: "Question not found" });
     }
@@ -131,7 +132,7 @@ Provide a JSON response with:
 `;
 
     // Call Gemini API
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // FIX: Changed to gemini-1.5-flash
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
@@ -154,9 +155,10 @@ Provide a JSON response with:
     }
 
     // Save solution to database
+    // FIX 2: userId is a number from MySQL, so use it directly
     const solution = new Solution({
-      userId: new mongoose.Types.ObjectId(userId),
-      questionId: new mongoose.Types.ObjectId(questionId),
+      userId: userId,
+      questionId: questionId,
       language,
       code,
       output,
@@ -172,15 +174,16 @@ Provide a JSON response with:
 
     await solution.save();
 
-    // Update user's progress (assuming you have a User model)
-    try {
-      await User.findByIdAndUpdate(userId, {
-        $addToSet: { solvedQuestions: questionId }
-      }, { new: true });
-    } catch (userError) {
-      console.warn("Could not update user solved questions:", userError);
-      // Continue even if user update fails
-    }
+    // Update user's progress. This line is likely for a different database
+    // and should be handled separately. I have commented it out for now.
+    // try {
+    //   await User.findByIdAndUpdate(userId, {
+    //     $addToSet: { solvedQuestions: questionId }
+    //   }, { new: true });
+    // } catch (userError) {
+    //   console.warn("Could not update user solved questions:", userError);
+    //   // Continue even if user update fails
+    // }
 
     res.json({
       success: true,
@@ -204,9 +207,10 @@ router.get("/check-solution/:userId/:questionId", async (req, res) => {
   const { userId, questionId } = req.params;
 
   try {
+    // FIX 3: Removed new mongoose.Types.ObjectId() since IDs are likely not BSON
     const solution = await Solution.findOne({
-      userId: new mongoose.Types.ObjectId(userId),
-      questionId: new mongoose.Types.ObjectId(questionId),
+      userId: userId,
+      questionId: questionId,
       isCorrect: true
     }).sort({ submittedAt: -1 });
 
@@ -230,9 +234,10 @@ router.get("/user-solutions/:userId/:questionId", async (req, res) => {
   const { userId, questionId } = req.params;
 
   try {
+    // FIX 4: Removed new mongoose.Types.ObjectId() from both userId and questionId
     const solutions = await Solution.find({
-      userId: new mongoose.Types.ObjectId(userId),
-      questionId: new mongoose.Types.ObjectId(questionId)
+      userId: userId,
+      questionId: questionId
     }).sort({ submittedAt: -1 });
 
     res.json({
@@ -253,56 +258,5 @@ router.get("/user-solutions/:userId/:questionId", async (req, res) => {
   }
 });
 
-
-const LANG_MAP = { c: 50, cpp: 54, java: 62, javascript: 63, python: 71 };
-
-router.post("/run", async (req, res) => {
-  const { language, code, input } = req.body;
-
-  if (!language || !code) {
-    return res.status(400).json({ error: "language and code are required" });
-  }
-
-  const language_id = LANG_MAP[language];
-  if (!language_id) {
-    return res.status(400).json({ error: "Unsupported language" });
-  }
-
-  try {
-    const submission = await axios.post(
-      `${process.env.JUDGE0_BASE_URL}/submissions?base64_encoded=false&wait=true`,
-      {
-        source_code: code,
-        language_id,
-        stdin: input || ""
-      },
-      {
-        headers: {
-          "content-type": "application/json",
-          "X-RapidAPI-Host": "judge0-ce.p.rapidapi.com",
-          "X-RapidAPI-Key": process.env.RAPIDAPI_KEY
-        },
-        timeout: 20000
-      }
-    );
-
-    const d = submission.data || {};
-    const output =
-      d.compile_output ||
-      d.stderr ||
-      d.stdout ||
-      (d.status ? d.status.description : "No output");
-
-    res.json({
-      output,
-      time: d.time,
-      memory: d.memory,
-      status: d.status ? d.status.description : "N/A"
-    });
-  } catch (e) {
-    console.error(e?.response?.data || e.message);
-    res.status(500).json({ error: "Execution failed. Try again." });
-  }
-});
 
 export default router;

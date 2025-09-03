@@ -238,6 +238,7 @@ export default function CodeRunner() {
   const editorRef = useRef(null);
   const textareaRef = useRef(null);
   const [userId, setUserId] = useState(localStorage.getItem('userId') || '');
+const [userLoading, setUserLoading] = useState(true);
   const [solutionStatus, setSolutionStatus] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [userSolutions, setUserSolutions] = useState([]);
@@ -248,16 +249,13 @@ useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
       console.error("Authentication token not found.");
-      // You could redirect to a login page here
+      setUserLoading(false); // 👈 Set to false on failure
       return;
     }
 
     try {
-      // NOTE: Adjust this URL if your auth routes are set up differently
       const response = await fetch('http://localhost:5000/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (!response.ok) {
@@ -265,16 +263,17 @@ useEffect(() => {
       }
 
       const userData = await response.json();
-      setUserId(userData.id); // The backend route returns the user object with an 'id' field
-      
+      setUserId(userData.id);
     } catch (error) {
       console.error("Error fetching user data:", error);
-      alert(error.message); // Let the user know something went wrong
+      alert(error.message);
+    } finally {
+      setUserLoading(false); // 👈 Set to false after completion
     }
   };
 
   fetchUserData();
-}, []); // The empty array ensures this runs only once when the component mounts
+}, []);
 
 useEffect(() => {
   if (userId && problemData?._id) {
@@ -810,15 +809,15 @@ console.log("Submitting:", {
             </button>
             
             <button
-              onClick={handleSubmit}
-              disabled={submitted}
-              className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2 shadow-lg"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              Submit
-            </button>
+  onClick={handleSubmit}
+  disabled={submitted || userLoading} 
+  className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2 shadow-lg"
+>
+  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+  </svg>
+  {submitting ? 'Submitting...' : 'Submit'}
+</button>
           </div>
         </div>
 
