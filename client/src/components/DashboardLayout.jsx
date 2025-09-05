@@ -4,13 +4,12 @@ import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
 
 export default function DashboardLayout({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Start with closed on mobile
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-
     if (!token) {
       navigate("/login");
       return;
@@ -26,9 +25,7 @@ export default function DashboardLayout({ children }) {
             Authorization: `Bearer ${token}`, // send token
           },
         });
-
         const data = await res.json();
-
         if (res.ok) {
           setUser({
             id: data.id,   // ✅ keep user id
@@ -48,12 +45,18 @@ export default function DashboardLayout({ children }) {
         navigate("/login");
       }
     };
-
     fetchUser();
   }, [navigate]);
 
+  // Keep sidebar closed by default on all screen sizes
+  // Remove the resize listener since we want consistent behavior
+
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
+  };
+
+  const closeSidebar = () => {
+    setSidebarOpen(false);
   };
 
   if (!user) {
@@ -66,15 +69,17 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <Sidebar isOpen={sidebarOpen} user={user} />
-
+      <Sidebar 
+        isOpen={sidebarOpen} 
+        user={user} 
+        onClose={closeSidebar}
+      />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar
           user={user}
           onToggleSidebar={toggleSidebar}
           sidebarOpen={sidebarOpen}
         />
-
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
           {children}
         </main>
